@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Piano Trainer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top-bar">
+      <h1>Piano Trainer</h1>
+      <button id="fullscreenBtn" class="btn tonal">Fullscreen</button>
+    </header>
+
+    <main class="app-shell">
+      <section id="screen-circle" class="screen active">
+        <div class="card hero">
+          <p class="label">Start Here</p>
+          <h2>Circle Of Fifths</h2>
+          <p>Select any key to open lessons. Completed keys are highlighted.</p>
+          <p id="globalMeta">Streak: 0 days · Last session: never</p>
+        </div>
+
+        <div class="card circle-card">
+          <div id="circleOfFifths" class="circle-of-fifths" aria-label="Circle of Fifths"></div>
+        </div>
+      </section>
+
+      <section id="screen-lessons" class="screen">
+        <div class="card">
+          <div class="row between wrap">
+            <div>
+              <p class="label">Key Lessons</p>
+              <h2 id="lessonsTitle">C Major</h2>
+              <p id="lessonsMeta">Choose any lesson to work on.</p>
+            </div>
+            <div class="row gap">
+              <button id="backToCircleBtn" class="btn outlined">Back To Circle</button>
+              <button id="toggleKeyCompleteBtn" class="btn filled">Mark Key Complete</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <p class="label">Session Options</p>
+            <div class="row gap wrap">
+              <button id="startSessionBtn" class="btn filled">Start 20-Min Session</button>
+              <button id="startTechniqueBtn" class="btn tonal">Technique Only</button>
+              <button id="startSongBtn" class="btn tonal">Song Only</button>
+            </div>
+            <p class="muted">No gating: choose what you want to practice today.</p>
+          </article>
+
+          <article class="card">
+            <p class="label">Progress</p>
+            <h3 id="completionMeta">0 / 5 modules done</h3>
+            <div class="progress-track"><div id="completionFill" class="progress-fill"></div></div>
+            <span id="keyStatusBadge" class="badge">In progress</span>
+          </article>
+        </div>
+
+        <div class="card">
+          <p class="label">Lesson Library</p>
+          <div id="lessonExerciseList" class="lesson-list"></div>
+        </div>
+
+        <div class="card">
+          <p class="label">Staff Reference</p>
+          <h3 id="keyStaffTitle">All C Notes (Bottom to Top)</h3>
+          <div id="keyStaffMap" class="staff-map"></div>
+        </div>
+      </section>
+
+      <section id="screen-practice" class="screen">
+        <div class="card practice-header">
+          <div>
+            <p class="label" id="blockLabel">Technique Block</p>
+            <h2 id="exerciseTitle">C Major Scale - Right Hand</h2>
+            <p id="exerciseMeta">Hands: Right</p>
+            <p id="rootFingerMeta" class="root-finger-meta hidden"></p>
+            <div id="arpeggioModeWrap" class="arpeggio-mode-wrap hidden">
+              <p class="label">Arpeggio Mode</p>
+              <div id="arpeggioModeButtons" class="mode-chip-row"></div>
+            </div>
+            <div id="scaleModeWrap" class="arpeggio-mode-wrap hidden">
+              <p class="label">Scale Range</p>
+              <div id="scaleModeButtons" class="mode-chip-row"></div>
+            </div>
+            <div id="scaleDirectionWrap" class="arpeggio-mode-wrap hidden">
+              <p class="label">Scale Direction</p>
+              <div id="scaleDirectionButtons" class="mode-chip-row"></div>
+            </div>
+            <div id="triadModeWrap" class="arpeggio-mode-wrap hidden">
+              <p class="label">Triad Step</p>
+              <div id="triadModeButtons" class="mode-chip-row"></div>
+            </div>
+            <div id="inversionModeWrap" class="arpeggio-mode-wrap hidden">
+              <p class="label">Inversion Step</p>
+              <div id="inversionModeButtons" class="mode-chip-row"></div>
+            </div>
+          </div>
+          <div class="row gap">
+            <span id="timerText" class="timer">10:00</span>
+            <button id="pauseTimerBtn" class="btn tonal">Pause</button>
+            <button id="backToLessonsBtn" class="btn outlined">Back To Lessons</button>
+          </div>
+        </div>
+
+        <article id="practiceStaffCard" class="card">
+          <p class="label">Grand Staff</p>
+          <div id="staff" class="staff"></div>
+        </article>
+
+        <article class="card keyboard-stage">
+          <p class="label">Keyboard</p>
+          <div id="keyboard" class="keyboard"></div>
+          <div id="noteSequence" class="sequence"></div>
+        </article>
+
+        <div class="card">
+          <div class="row between wrap">
+            <div id="exerciseHint">Play smoothly with steady fingering.</div>
+            <div class="row gap">
+              <button id="prevExerciseBtn" class="btn outlined">Prev</button>
+              <button id="nextExerciseBtn" class="btn outlined">Next</button>
+              <button id="doneExerciseBtn" class="btn filled">Mark Done</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-complete" class="screen">
+        <div class="card hero">
+          <p class="label">Session Complete</p>
+          <h2>Nice work</h2>
+          <p id="sessionSummary">You completed drills and song practice.</p>
+          <div class="row gap">
+            <button id="finishBtn" class="btn filled">Back To Lessons</button>
+            <button id="repeatSongBtn" class="btn outlined">Repeat Song Block</button>
+            <button id="circleFromCompleteBtn" class="btn outlined">Circle Of Fifths</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

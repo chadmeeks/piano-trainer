@@ -12,31 +12,38 @@ Open:
 
 - `http://localhost:3000`
 
-## 2) Core operations
+## 2) Core workflow
 
-- Select key from Circle of Fifths.
-- Open lesson and practice module.
-- Use module-specific toggles (scale/arpeggio/triad/inversion controls).
-- Mark modules done and optionally mark key complete.
+1. Open key from Circle of Fifths.
+2. Use Lessons screen to start timer.
+3. Open lessons and practice in Practice screen.
+4. Review logged days/lessons in History screen.
 
-## 3) Troubleshooting
+## 3) Timer + history behavior
 
-### A) Page loads but controls seem stale
+- `Start`: enables active session tracking.
+- `Pause/Resume`: toggles timer accumulation.
+- `Reset`: stops timer and resets visible elapsed counter.
+- While active, lesson views are logged to the current day.
+
+## 4) Troubleshooting
+
+### A) UI seems stale after changes
 
 - Hard refresh browser (`Cmd+Shift+R`).
 
-### B) Progress appears corrupted or unexpected
+### B) Unexpected progress/history values
 
-- Clear `localStorage` for site and reload.
-- This resets persisted progress/preferences.
+- Clear `localStorage` for `localhost:3000`.
+- Reload app.
 
-### C) UI/lesson state feels inconsistent after big changes
+### C) Calendar seems empty
 
-- Reload page to reset transient runtime state.
-- If needed, clear `localStorage`.
+- Ensure timer was started before practice.
+- Lesson views only log during active timer sessions.
 
-## 4) Operational guidance
+## 5) Operational guidance
 
-- This prototype is local-first and single-user.
-- `localStorage` is the only persistence layer.
-- Use git commits regularly since there is no server-side data recovery.
+- Prototype is local-first and single-user.
+- `localStorage` is source of truth for app progress/history.
+- Commit frequently; there is no server-side recovery.

@@ -12,31 +12,52 @@ Top-level shape:
   "lastSessionISO": null,
   "arpeggioMode": "both",
   "scaleMode": "1",
-  "scaleDirection": "up"
+  "scaleHand": "rh",
+  "scaleDirection": "up",
+  "practiceHistory": {},
+  "selectedHistoryDateKey": null
 }
 ```
 
 ## Fields
 
 - `selectedKey` string
-  - Current key in lessons context.
+  - Current key context in lessons.
+
 - `keyProgress` object
-  - Map by key name (for example `"C"`, `"G"`, ...):
+  - Keyed by pitch class (for example `"C"`, `"G"`):
     - `completed` boolean
-    - `modules` object (`scales`, `arpeggios`, `chords`, `inversions`, `songs`) booleans
+    - `modules` object with booleans:
+      - `scales`, `arpeggios`, `chords`, `inversions`, `songs`
+
 - `streak` number
-  - Daily session streak.
+  - Cached current streak value (also derived from history data).
+
 - `lastSessionISO` string or `null`
-  - Last completed session timestamp.
+  - Most recent timer activity timestamp.
+
 - `arpeggioMode` string
-  - One of: `lh-1`, `lh-2`, `rh-1`, `rh-2`, `both`.
+  - `lh-1`, `lh-2`, `rh-1`, `rh-2`, `both`.
+
 - `scaleMode` string
-  - `1` or `2` (octave range).
+  - `1` or `2` octaves.
+
+- `scaleHand` string
+  - `rh` or `lh`.
+
 - `scaleDirection` string
   - `up` or `updown`.
 
+- `practiceHistory` object
+  - Keyed by day (`YYYY-MM-DD`):
+    - `seconds` number
+    - `lessons` object keyed by lesson id:
+      - `title`, `key`, `moduleId`
+
+- `selectedHistoryDateKey` string or `null`
+  - Last selected day on History screen.
+
 ## Notes
 
-- Not all runtime-only fields are persisted.
-- Temporary UI state (current lesson step indexes) is in-memory only.
-- Clearing browser storage resets progress and preferences.
+- Transient runtime fields (current screen, indexes, etc.) are not fully persisted.
+- Clearing site storage resets progress, preferences, and practice history.

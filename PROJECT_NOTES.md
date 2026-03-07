@@ -5,44 +5,61 @@
 Build a web app that helps practice piano key-by-key:
 - learn scales, arpeggios, chords, inversions
 - practice songs in the same key
-- mark keys complete over time
+- track practice consistency over time
 
-## Current Direction
+## Current Product Shape
 
-- Landing page: Circle of Fifths.
-- User selects any key (no gating).
-- Lessons for that key include both technique and songs.
-- Completion is visualized back on the circle.
+- Top-level navigation:
+  - Circle
+  - Lessons
+  - History
+- Circle of Fifths is the default landing screen.
+- Any key can be selected (no lesson-gating model).
+- Key completion is manually set and shown on the circle.
 
 ## Current UX Emphasis
 
 - TV-friendly readability for practice sessions.
-- Full-width 88-key keyboard as primary visual anchor.
-- Technique lessons can show staff + keyboard together.
-- Triads and inversions are step-based via explicit toggle chips.
+- 88-key full-width keyboard as primary visual anchor.
+- Technique lessons include compact staff above keyboard.
+- Step toggles for triads/inversions avoid overloading chapter navigation.
 
 ## Implemented Highlights
 
-- Circle of Fifths key selection screen.
-- Key lesson screen with completion controls.
-- Practice screen with:
-  - Scales range/direction toggles
-  - Arpeggio mode toggles (LH/RH/2-octave/Both)
-  - Triad step toggles (I, IV, V, vi)
-  - Inversion step toggles (root/1st/2nd across I/IV/V/vi)
-- Both-hand coloring for triads/inversions/arpeggios.
-- Root-note + root-finger guidance for triads/inversions.
+- Scales are now one lesson per key with toggles:
+  - hand (`Right Hand` / `Left Hand`)
+  - range (`1 octave` / `2 octaves`)
+  - direction (`ascending` / `up and down`)
+- Arpeggios include mode toggles:
+  - LH/RH and octave variants, plus both-hands mode.
+- Triads and inversions have dedicated step chips.
+- Triads/inversions/arpeggios support both-hand color mapping.
+- Root-note and root-finger guidance shown for triads/inversions.
+
+## Practice Tracking
+
+- Lessons screen timer controls:
+  - Start
+  - Pause/Resume
+  - Reset
+- While timer session is active:
+  - seconds are recorded to the current day
+  - lessons viewed are logged by day
+- History screen shows:
+  - month calendar with practiced-day highlights
+  - day-level lesson list and time
+  - streak metrics
 
 ## Architecture Notes
 
 - Single static Node server (`server.js`), no API layer.
-- Application state in browser `localStorage` under `pianoTrainerV2`.
-- Core logic in `public/app.js`.
+- App state stored in `localStorage` key `pianoTrainerV2`.
+- Core behavior in `public/app.js`.
 
 ## Suggested Next Work
 
-1. Song module redesign (currently less mature than technique modules).
-2. Add MIDI input support for objective feedback.
-3. Add objective mastery scoring per module/key.
-4. Expand key-specific song content quality beyond placeholders.
-5. Add export/import for local progress backups.
+1. Song lesson UX redesign (currently weaker than technique modules).
+2. Add practice-history filtering (key/module filters).
+3. Add minimum-practice threshold for streak qualification.
+4. Add MIDI input for objective feedback and scoring.
+5. Add progress export/import for backup/recovery.

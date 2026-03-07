@@ -14,60 +14,77 @@
 
 - Navigation domain:
   - Circle of Fifths landing
-  - Key-specific lessons
-  - Practice and completion screens
+  - Key lessons
+  - Practice view
+  - Dedicated history view
 - Curriculum domain:
   - Scales, arpeggios, triads, inversions, songs
-  - Per-module lesson transformations (toggles/modes)
-- Visual practice domain:
-  - 88-key keyboard rendering
-  - Staff rendering and note mapping
-  - Hand-aware coloring (LH/RH)
+  - Module-specific transforms/toggles
+- Practice telemetry domain:
+  - Timer state
+  - Per-day practice seconds
+  - Per-day lessons viewed
 
-## 3) Application State
+## 3) State Model (high level)
 
-Main state is maintained in-memory and partially persisted:
+Main in-memory + persisted state includes:
 
-- Global/session:
-  - `selectedKey`, `screen`, `streak`, `lastSessionISO`
-- Lesson controls:
-  - `arpeggioMode`, `scaleMode`, `scaleDirection`
+- Navigation/context:
+  - `screen`, `selectedKey`
+- Lesson control state:
+  - `arpeggioMode`
+  - `scaleHand`, `scaleMode`, `scaleDirection`
   - `chordStepIndex`, `inversionStepIndex`
+- Timer/session:
+  - `blockSecondsRemaining`
+  - `timerRunning`, `timerSessionActive`
 - Progress:
-  - `keyProgress[<key>]` with module completion + key completion flag
+  - `keyProgress[<key>]` (`completed`, module booleans)
+- History:
+  - `practiceHistory[YYYY-MM-DD]` with `seconds` and `lessons`
+  - `selectedHistoryDateKey`, `historyMonthOffset`
 
 ## 4) Data Flow
 
 1. App boot:
 - Load persisted state from `localStorage`.
-- Render circle + selected key lessons.
+- Render Circle, Lessons, History, Practice shells.
 
 2. Key selection:
-- Circle button sets `selectedKey`.
-- Curriculum is generated for that key.
+- Circle key click sets `selectedKey`.
+- Curriculum is generated dynamically per key.
 
-3. Lesson transforms:
-- Base lesson selected from curriculum.
-- Optional transforms applied (scale mode, chord step, inversion step, arpeggio mode).
+3. Lesson rendering:
+- Base lesson selected by current block/index.
+- Optional transforms applied:
+  - scale hand/range/direction
+  - arpeggio mode
+  - triad step
+  - inversion step
 
-4. Rendering:
-- Keyboard and staff read transformed lesson notes/fingering.
-- Root-note guidance and LH/RH coloring applied when available.
+4. Practice tracking:
+- Timer tick increments daily `seconds`.
+- Viewed lessons are recorded by day while timer session is active.
 
-## 5) Keyboard/Staff Rendering
+5. History rendering:
+- Calendar aggregates stored day entries.
+- Day selection reveals lesson list + practice duration.
+
+## 5) Rendering Subsystems
 
 - Keyboard:
-  - Programmatically generates 88 notes (`A0` to `C8`).
-  - White keys as base grid; black keys overlaid by anchor offsets.
-  - Active notes and fingers rendered per lesson state.
+  - 88-note map (`A0`..`C8`)
+  - white-key grid + black-key overlay
+  - hand-aware highlight/finger rendering
 - Staff:
-  - Compact grand staff with clef glyphs.
-  - Noteheads mapped via simple diatonic index function.
-  - Ledger lines generated for out-of-staff notes.
+  - compact grand staff with clef glyphs
+  - note mapping from diatonic index
+  - ledger line generation for out-of-staff notes
+  - optional LH/RH color legend
 
 ## 6) Known Constraints
 
-- No backend API or multi-device sync.
-- No authentication.
-- Progress tied to browser/device storage.
-- Song module quality is currently less developed than technique module depth.
+- No backend API or cloud sync.
+- No auth/multi-user model.
+- History/progress data is browser-local.
+- Song content and song UX are less mature than technique modules.

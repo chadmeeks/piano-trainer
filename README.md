@@ -1,24 +1,29 @@
 # Piano Trainer (Prototype)
 
-Local web app for key-by-key piano practice with a Circle of Fifths entry point, technique modules, and song modules.
+Local web app for key-by-key piano practice with a Circle of Fifths landing screen, technique modules, and song modules.
 
 Project continuity notes live in `PROJECT_NOTES.md`.
+Session resume context lives in `SESSION_MEMORY.md`.
 Technical docs live in `docs/`.
 
 ## What this prototype does
 
 - Landing workflow:
   - Opens on Circle of Fifths.
-  - Click a key to open that key's lessons.
-  - Mark a key complete to reflect progress on the circle.
+  - Click a key to open lessons.
+  - Mark key completion and reflect that visually on circle nodes.
 - Lessons workflow:
   - Technique modules: scales, arpeggios, triads, inversions.
-  - Song modules per key (C has named songs; other keys use placeholder song drills).
-  - Per-lesson toggles (scale range/direction, arpeggio hand modes, triad/inversion step toggles).
+  - Song modules per key (C has named songs, other keys use placeholder drills).
+  - Per-lesson toggles for scale/arpeggio/triad/inversion variations.
 - Practice visuals:
-  - Full-width 88-key keyboard with black-key overlay.
-  - Finger overlays and LH/RH color coding for both-hand content.
-  - Staff shown for technique lessons.
+  - Full-width 88-key keyboard with overlaid black keys.
+  - Finger overlays and LH/RH color coding for both-hand lessons.
+  - Technique staff above keyboard.
+- History workflow:
+  - Dedicated `History` screen (not embedded in lessons).
+  - Calendar showing practiced days and lessons viewed per day.
+  - Current streak, longest streak, and total practiced-day stats.
 
 ## Quick start
 
@@ -34,7 +39,7 @@ npm start
 
 ## Notes
 
-- Runtime state is browser-local via `localStorage` (no database yet).
+- Runtime state is browser-local via `localStorage` (`pianoTrainerV2`).
 - Server is a static file server (`server.js`) with no backend API routes.
 - This is a local prototype focused on iteration speed.
 

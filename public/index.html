@@ -14,7 +14,14 @@
   </head>
   <body>
     <header class="top-bar">
-      <h1>Piano Trainer</h1>
+      <div class="top-nav-wrap">
+        <h1>Piano Trainer</h1>
+        <nav class="top-nav" aria-label="Primary">
+          <button id="navCircleBtn" class="btn outlined nav-btn">Circle</button>
+          <button id="navLessonsBtn" class="btn outlined nav-btn">Lessons</button>
+          <button id="navHistoryBtn" class="btn outlined nav-btn">History</button>
+        </nav>
+      </div>
       <button id="fullscreenBtn" class="btn tonal">Fullscreen</button>
     </header>
 
@@ -49,13 +56,14 @@
 
         <div class="grid-2">
           <article class="card">
-            <p class="label">Session Options</p>
+            <p class="label">Session Timer</p>
             <div class="row gap wrap">
-              <button id="startSessionBtn" class="btn filled">Start 20-Min Session</button>
-              <button id="startTechniqueBtn" class="btn tonal">Technique Only</button>
-              <button id="startSongBtn" class="btn tonal">Song Only</button>
+              <span id="sessionTimerText" class="timer">00:00</span>
+              <button id="sessionStartBtn" class="btn filled">Start</button>
+              <button id="sessionPauseBtn" class="btn tonal">Pause</button>
+              <button id="sessionResetBtn" class="btn outlined">Reset</button>
             </div>
-            <p class="muted">No gating: choose what you want to practice today.</p>
+            <p class="muted">Use this to track daily practice and lesson coverage.</p>
           </article>
 
           <article class="card">
@@ -78,6 +86,39 @@
         </div>
       </section>
 
+      <section id="screen-history" class="screen">
+        <div class="card">
+          <div class="row between wrap">
+            <div>
+              <p class="label">Practice History</p>
+              <h2>Calendar</h2>
+              <p>Track days practiced and lessons viewed each day.</p>
+            </div>
+            <div class="history-streaks">
+              <div class="history-stat"><span class="label">Current Streak</span><strong id="historyCurrentStreak">0</strong></div>
+              <div class="history-stat"><span class="label">Longest Streak</span><strong id="historyLongestStreak">0</strong></div>
+              <div class="history-stat"><span class="label">Practiced Days</span><strong id="historyPracticedDays">0</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row between wrap">
+            <button id="historyPrevMonthBtn" class="btn outlined">Prev Month</button>
+            <h3 id="historyMonthLabel">Month</h3>
+            <button id="historyNextMonthBtn" class="btn outlined">Next Month</button>
+          </div>
+          <div id="historyCalendar" class="history-calendar"></div>
+        </div>
+
+        <div class="card">
+          <p class="label">Day Details</p>
+          <h3 id="historyDayTitle">Select a day</h3>
+          <p id="historyDayMeta">No day selected.</p>
+          <ul id="historyLessonList" class="history-lesson-list"></ul>
+        </div>
+      </section>
+
       <section id="screen-practice" class="screen">
         <div class="card practice-header">
           <div>
@@ -92,6 +133,10 @@
             <div id="scaleModeWrap" class="arpeggio-mode-wrap hidden">
               <p class="label">Scale Range</p>
               <div id="scaleModeButtons" class="mode-chip-row"></div>
+            </div>
+            <div id="scaleHandWrap" class="arpeggio-mode-wrap hidden">
+              <p class="label">Scale Hand</p>
+              <div id="scaleHandButtons" class="mode-chip-row"></div>
             </div>
             <div id="scaleDirectionWrap" class="arpeggio-mode-wrap hidden">
               <p class="label">Scale Direction</p>

@@ -34,10 +34,28 @@ h1, h2, h3, p {
   justify-content: space-between;
   align-items: center;
   padding: 20px 28px;
+  gap: 14px;
 }
 
 .top-bar h1 {
   font-size: clamp(1.5rem, 2.5vw, 2.3rem);
+}
+
+.top-nav-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.top-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-btn.active {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border-color: var(--md-sys-color-primary);
 }
 
 .app-shell {
@@ -250,6 +268,84 @@ h1, h2, h3, p {
 
 .lesson-item h4 {
   margin: 0 0 4px;
+}
+
+.history-streaks {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-stat {
+  min-width: 124px;
+  background: #f2f7ff;
+  border: 1px solid #cddbf1;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.history-stat strong {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.history-calendar {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.history-weekday {
+  font-size: 0.8rem;
+  color: #51627a;
+  text-align: center;
+  font-weight: 700;
+}
+
+.history-day {
+  border: 1px solid #cad8ed;
+  background: #ffffff;
+  border-radius: 10px;
+  min-height: 76px;
+  padding: 8px;
+  display: grid;
+  align-content: space-between;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-day.empty {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+
+.history-day.practiced {
+  background: #e4f4e9;
+  border-color: #84c999;
+}
+
+.history-day.selected {
+  outline: 2px solid #205fa6;
+}
+
+.history-day .day-num {
+  font-weight: 700;
+}
+
+.history-day .day-lessons {
+  font-size: 0.78rem;
+  color: #335264;
+}
+
+.history-lesson-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
 }
 
 .keyboard-stage {

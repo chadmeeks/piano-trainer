@@ -2,6 +2,7 @@ const screens = {
   circle: document.getElementById("screen-circle"),
   lessons: document.getElementById("screen-lessons"),
   practice: document.getElementById("screen-practice"),
+  history: document.getElementById("screen-history"),
   complete: document.getElementById("screen-complete")
 };
 
@@ -26,6 +27,10 @@ const ARPEGGIO_MODES = [
 const SCALE_MODES = [
   { id: "1", label: "1 Octave" },
   { id: "2", label: "2 Octaves" }
+];
+const SCALE_HANDS = [
+  { id: "rh", label: "Right Hand" },
+  { id: "lh", label: "Left Hand" }
 ];
 const SCALE_DIRECTIONS = [
   { id: "up", label: "Ascending only" },
@@ -58,16 +63,21 @@ const state = {
   techniqueIndex: 0,
   songIndex: 0,
   sessionMode: "custom",
-  blockSecondsRemaining: 600,
+  blockSecondsRemaining: 0,
   timerRunning: false,
+  timerSessionActive: false,
   intervalId: null,
   streak: 0,
   lastSessionISO: null,
   arpeggioMode: "both",
   scaleMode: "1",
+  scaleHand: "rh",
   scaleDirection: "up",
   chordStepIndex: 0,
   inversionStepIndex: 0,
+  practiceHistory: {},
+  historyMonthOffset: 0,
+  selectedHistoryDateKey: null,
   completedExerciseIds: []
 };
 
@@ -114,7 +124,10 @@ function loadState() {
     state.lastSessionISO = parsed.lastSessionISO || null;
     state.arpeggioMode = ARPEGGIO_MODES.some((mode) => mode.id === parsed.arpeggioMode) ? parsed.arpeggioMode : "both";
     state.scaleMode = SCALE_MODES.some((mode) => mode.id === parsed.scaleMode) ? parsed.scaleMode : "1";
+    state.scaleHand = SCALE_HANDS.some((mode) => mode.id === parsed.scaleHand) ? parsed.scaleHand : "rh";
     state.scaleDirection = SCALE_DIRECTIONS.some((mode) => mode.id === parsed.scaleDirection) ? parsed.scaleDirection : "up";
+    state.practiceHistory = parsed.practiceHistory && typeof parsed.practiceHistory === "object" ? parsed.practiceHistory : {};
+    state.selectedHistoryDateKey = typeof parsed.selectedHistoryDateKey === "string" ? parsed.selectedHistoryDateKey : null;
 
     for (const keyName of CIRCLE_KEYS) {
       const src = parsed.keyProgress?.[keyName] || {};
@@ -138,7 +151,10 @@ function saveState() {
       lastSessionISO: state.lastSessionISO,
       arpeggioMode: state.arpeggioMode,
       scaleMode: state.scaleMode,
-      scaleDirection: state.scaleDirection
+      scaleHand: state.scaleHand,
+      scaleDirection: state.scaleDirection,
+      practiceHistory: state.practiceHistory,
+      selectedHistoryDateKey: state.selectedHistoryDateKey
     })
   );
 }
@@ -148,6 +164,7 @@ function showScreen(screenName) {
   Object.entries(screens).forEach(([name, el]) => {
     el.classList.toggle("active", name === screenName);
   });
+  renderNav();
 }
 
 function currentKeyProgress() {
@@ -159,9 +176,108 @@ function completedModuleCountForKey(keyName) {
   return MODULES.filter((m) => progress.modules[m.id]).length;
 }
 
+function dateKeyFromDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function ensureHistoryDay(dayKey) {
+  if (!state.practiceHistory[dayKey]) {
+    state.practiceHistory[dayKey] = {
+      seconds: 0,
+      lessons: {}
+    };
+  }
+  return state.practiceHistory[dayKey];
+}
+
+function practiceDayKeysSorted() {
+  return Object.keys(state.practiceHistory)
+    .filter((key) => Number(state.practiceHistory[key]?.seconds || 0) > 0)
+    .sort();
+}
+
+function computeStreaks() {
+  const keys = practiceDayKeysSorted();
+  if (!keys.length) return { current: 0, longest: 0, practicedDays: 0 };
+
+  const dayMs = 86400000;
+  const currentDateKey = dateKeyFromDate(new Date());
+  const keySet = new Set(keys);
+  let current = 0;
+  let cursor = new Date(`${currentDateKey}T00:00:00`);
+  while (keySet.has(dateKeyFromDate(cursor))) {
+    current += 1;
+    cursor = new Date(cursor.getTime() - dayMs);
+  }
+
+  let longest = 1;
+  let run = 1;
+  for (let i = 1; i < keys.length; i += 1) {
+    const prev = new Date(`${keys[i - 1]}T00:00:00`);
+    const curr = new Date(`${keys[i]}T00:00:00`);
+    if ((curr - prev) === dayMs) {
+      run += 1;
+      if (run > longest) longest = run;
+    } else {
+      run = 1;
+    }
+  }
+
+  return { current, longest, practicedDays: keys.length };
+}
+
+function addPracticeSecond() {
+  const now = new Date();
+  const dayKey = dateKeyFromDate(now);
+  const day = ensureHistoryDay(dayKey);
+  day.seconds = Number(day.seconds || 0) + 1;
+  state.lastSessionISO = now.toISOString();
+}
+
+function trackLessonView(exercise) {
+  if (!state.timerSessionActive || !exercise?.id) return;
+  const dayKey = dateKeyFromDate(new Date());
+  const day = ensureHistoryDay(dayKey);
+  const alreadyTracked = Boolean(day.lessons[exercise.id]);
+  day.lessons[exercise.id] = {
+    title: exercise.title,
+    key: state.selectedKey,
+    moduleId: exercise.moduleId || "unknown"
+  };
+  if (!alreadyTracked) saveState();
+}
+
 function renderGlobalMeta() {
+  const streaks = computeStreaks();
+  state.streak = streaks.current;
   const last = state.lastSessionISO ? new Date(state.lastSessionISO).toLocaleDateString() : "never";
-  document.getElementById("globalMeta").textContent = `Streak: ${state.streak} day${state.streak === 1 ? "" : "s"} · Last session: ${last}`;
+  document.getElementById("globalMeta").textContent = `Streak: ${streaks.current} day${streaks.current === 1 ? "" : "s"} · Last session: ${last}`;
+}
+
+function renderNav() {
+  const navMap = {
+    circle: "navCircleBtn",
+    lessons: "navLessonsBtn",
+    history: "navHistoryBtn",
+    practice: "navLessonsBtn",
+    complete: "navLessonsBtn"
+  };
+  for (const id of ["navCircleBtn", "navLessonsBtn", "navHistoryBtn"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.classList.toggle("active", navMap[state.screen] === id);
+  }
+}
+
+function renderSessionTimerControls() {
+  const timerText = document.getElementById("sessionTimerText");
+  const pauseBtn = document.getElementById("sessionPauseBtn");
+  if (!timerText || !pauseBtn) return;
+  timerText.textContent = formatTime(state.blockSecondsRemaining);
+  pauseBtn.textContent = state.timerRunning ? "Pause" : "Resume";
 }
 
 function renderCircle() {
@@ -246,22 +362,25 @@ function buildCurriculumForKey(keyName) {
 
   const technique = [
     {
-      id: `${keyName}-scale-rh`,
+      id: `${keyName}-scale`,
       moduleId: "scales",
-      title: `${keyLabel(keyName)} Scale - Right Hand`,
-      meta: "Hands: Right",
+      title: `${keyLabel(keyName)} Scale`,
+      meta: "Hands: Both",
       hint: "Play evenly and keep your hand relaxed.",
       notes: scaleRh,
-      fingering: [1, 2, 3, 1, 2, 3, 4, 5]
-    },
-    {
-      id: `${keyName}-scale-lh`,
-      moduleId: "scales",
-      title: `${keyLabel(keyName)} Scale - Left Hand`,
-      meta: "Hands: Left",
-      hint: "Keep thumb crossings smooth.",
-      notes: scaleLh,
-      fingering: [5, 4, 3, 2, 1, 3, 2, 1]
+      fingering: [1, 2, 3, 1, 2, 3, 4, 5],
+      scaleByHand: {
+        rh: {
+          notes: scaleRh,
+          fingering: [1, 2, 3, 1, 2, 3, 4, 5],
+          meta: "Hands: Right"
+        },
+        lh: {
+          notes: scaleLh,
+          fingering: [5, 4, 3, 2, 1, 3, 2, 1],
+          meta: "Hands: Left"
+        }
+      }
     },
     {
       id: `${keyName}-arp`,
@@ -437,9 +556,12 @@ function applyArpeggioMode(exercise) {
 
 function applyScaleMode(exercise) {
   if (!exercise || exercise.moduleId !== "scales") return exercise;
-  const baseNotes = exercise.notes || [];
-  const isRightHand = String(exercise.meta || "").toLowerCase().includes("right");
-  const isLeftHand = String(exercise.meta || "").toLowerCase().includes("left");
+  const handCfg = exercise.scaleByHand?.[state.scaleHand] || exercise.scaleByHand?.rh || null;
+  const baseNotes = (handCfg?.notes || exercise.notes || []);
+  const baseFingering = (handCfg?.fingering || exercise.fingering || []);
+  const handMeta = handCfg?.meta || "Hands: Right";
+  const isRightHand = state.scaleHand === "rh";
+  const isLeftHand = state.scaleHand === "lh";
   if (baseNotes.length < 8) return exercise;
 
   const oneOctAscending = baseNotes.slice(0, 8);
@@ -455,19 +577,19 @@ function applyScaleMode(exercise) {
       ? [1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 5]
       : isLeftHand
         ? [5, 4, 3, 2, 1, 3, 2, 1, 4, 3, 2, 1, 3, 2, 1]
-        : exercise.fingering
+        : baseFingering
     : isRightHand
       ? [1, 2, 3, 1, 2, 3, 4, 5]
       : isLeftHand
         ? [5, 4, 3, 2, 1, 3, 2, 1]
-        : exercise.fingering;
+        : baseFingering;
 
   if (state.scaleDirection === "updown") {
     const descendingNotes = ascendingNotes.slice(0, -1).reverse();
     const descendingFingering = [...ascendingFingering].slice(0, -1).reverse();
     return {
       ...exercise,
-      meta: `${exercise.meta} · ${state.scaleMode} Octave${state.scaleMode === "2" ? "s" : ""} · Up and down`,
+      meta: `${handMeta} · ${state.scaleMode} Octave${state.scaleMode === "2" ? "s" : ""} · Up and down`,
       notes: [...ascendingNotes, ...descendingNotes],
       fingering: [...ascendingFingering, ...descendingFingering]
     };
@@ -475,7 +597,7 @@ function applyScaleMode(exercise) {
 
   return {
     ...exercise,
-    meta: `${exercise.meta} · ${state.scaleMode} Octave${state.scaleMode === "2" ? "s" : ""} · Ascending`,
+    meta: `${handMeta} · ${state.scaleMode} Octave${state.scaleMode === "2" ? "s" : ""} · Ascending`,
     notes: ascendingNotes,
     fingering: ascendingFingering
   };
@@ -550,6 +672,19 @@ function renderScaleModes(visible) {
 
   row.innerHTML = SCALE_MODES.map((mode) => (
     `<button class="mode-chip ${mode.id === state.scaleMode ? "active" : ""}" data-scale-mode="${mode.id}">${mode.label}</button>`
+  )).join("");
+}
+
+function renderScaleHands(visible) {
+  const wrap = document.getElementById("scaleHandWrap");
+  const row = document.getElementById("scaleHandButtons");
+  if (!wrap || !row) return;
+
+  wrap.classList.toggle("hidden", !visible);
+  if (!visible) return;
+
+  row.innerHTML = SCALE_HANDS.map((mode) => (
+    `<button class="mode-chip ${mode.id === state.scaleHand ? "active" : ""}" data-scale-hand="${mode.id}">${mode.label}</button>`
   )).join("");
 }
 
@@ -641,6 +776,77 @@ function renderLessons() {
     `${keyName}5`,
     `${keyName}6`
   ], "keyStaffMap", true);
+  renderSessionTimerControls();
+}
+
+function historyMonthDate() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + state.historyMonthOffset, 1);
+}
+
+function renderHistoryDayDetails(dayKey) {
+  const title = document.getElementById("historyDayTitle");
+  const meta = document.getElementById("historyDayMeta");
+  const list = document.getElementById("historyLessonList");
+  if (!title || !meta || !list) return;
+
+  if (!dayKey || !state.practiceHistory[dayKey]) {
+    title.textContent = "Select a day";
+    meta.textContent = "No day selected.";
+    list.innerHTML = "";
+    return;
+  }
+
+  const row = state.practiceHistory[dayKey];
+  const seconds = Number(row.seconds || 0);
+  const lessons = Object.values(row.lessons || {});
+  title.textContent = dayKey;
+  meta.textContent = `${formatTime(seconds)} practiced · ${lessons.length} lesson${lessons.length === 1 ? "" : "s"} viewed`;
+  list.innerHTML = lessons.length
+    ? lessons.map((lesson) => `<li>${lesson.title} (${lesson.key})</li>`).join("")
+    : "<li>No lessons logged.</li>";
+}
+
+function renderHistory() {
+  const streaks = computeStreaks();
+  document.getElementById("historyCurrentStreak").textContent = String(streaks.current);
+  document.getElementById("historyLongestStreak").textContent = String(streaks.longest);
+  document.getElementById("historyPracticedDays").textContent = String(streaks.practicedDays);
+
+  const monthDate = historyMonthDate();
+  const monthLabel = monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  document.getElementById("historyMonthLabel").textContent = monthLabel;
+
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const cells = [];
+  for (const label of weekdays) {
+    cells.push(`<div class="history-weekday">${label}</div>`);
+  }
+  for (let i = 0; i < startWeekday; i += 1) {
+    cells.push(`<div class="history-day empty"></div>`);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const d = new Date(year, month, day);
+    const dayKey = dateKeyFromDate(d);
+    const row = state.practiceHistory[dayKey];
+    const practiced = Number(row?.seconds || 0) > 0;
+    const lessonCount = Object.keys(row?.lessons || {}).length;
+    const selected = state.selectedHistoryDateKey === dayKey;
+    cells.push(`
+      <button class="history-day ${practiced ? "practiced" : ""} ${selected ? "selected" : ""}" data-history-day="${dayKey}">
+        <span class="day-num">${day}</span>
+        <span class="day-lessons">${practiced ? `${lessonCount} lesson${lessonCount === 1 ? "" : "s"}` : ""}</span>
+      </button>
+    `);
+  }
+  document.getElementById("historyCalendar").innerHTML = cells.join("");
+  renderHistoryDayDetails(state.selectedHistoryDateKey);
 }
 
 function formatTime(totalSec) {
@@ -670,7 +876,7 @@ function renderPractice() {
   document.getElementById("exerciseHint").textContent = isBothHandsArpeggio
     ? `${exercise.hint} Meeting note rule: play both thumbs together (1+1).`
     : exercise.hint;
-  document.getElementById("timerText").textContent = state.timerRunning ? formatTime(state.blockSecondsRemaining) : "Timer Off";
+  document.getElementById("timerText").textContent = formatTime(state.blockSecondsRemaining);
   document.getElementById("pauseTimerBtn").textContent = state.timerRunning ? "Pause" : "Resume";
 
   if (practiceStaffCard) {
@@ -678,6 +884,7 @@ function renderPractice() {
   }
   renderArpeggioModes(isArpeggioLesson);
   renderScaleModes(isScaleLesson);
+  renderScaleHands(isScaleLesson);
   renderScaleDirections(isScaleLesson);
   renderTriadModes(isTriadLesson, exercise);
   renderInversionModes(isInversionLesson, exercise);
@@ -687,6 +894,21 @@ function renderPractice() {
     renderStaffSVG(exercise.notes, "staff", false, exercise.handAssignments || null);
   }
   document.getElementById("noteSequence").textContent = `Notes: ${exercise.notes.map(displayPitchOnly).join(" - ")}`;
+  trackLessonView(exercise);
+
+  if (rootFingerMeta) {
+    const showRootMeta = (isInversionLesson || isTriadLesson)
+      && exercise?.rootPitch
+      && Number.isFinite(exercise?.rootFingerLH)
+      && Number.isFinite(exercise?.rootFingerRH);
+    if (showRootMeta) {
+      rootFingerMeta.classList.remove("hidden");
+      rootFingerMeta.textContent = `Root note: ${exercise.rootPitch} · LH root finger: ${exercise.rootFingerLH} · RH root finger: ${exercise.rootFingerRH}`;
+    } else {
+      rootFingerMeta.classList.add("hidden");
+      rootFingerMeta.textContent = "";
+    }
+  }
 }
 
 function renderKeyboard(exercise) {
@@ -957,80 +1179,62 @@ function moveExercise(delta) {
   renderPractice();
 }
 
-function updateStreakOnSessionComplete() {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const prev = state.lastSessionISO ? new Date(state.lastSessionISO) : null;
-
-  if (!prev) {
-    state.streak = 1;
-  } else {
-    const prevDay = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate());
-    const diffDays = Math.round((today - prevDay) / 86400000);
-    if (diffDays === 0) {
-      // Keep streak.
-    } else if (diffDays === 1) {
-      state.streak += 1;
-    } else {
-      state.streak = 1;
-    }
-  }
-
-  state.lastSessionISO = now.toISOString();
-  saveState();
-}
-
-function beginBlock(blockName, index = 0, startTimer = false) {
+function beginBlock(blockName, index = 0) {
   state.block = blockName;
   if (blockName === "technique") state.techniqueIndex = index;
   if (blockName === "song") state.songIndex = index;
   state.chordStepIndex = 0;
   state.inversionStepIndex = 0;
-
-  state.blockSecondsRemaining = 600;
-  state.timerRunning = startTimer;
   renderPractice();
   showScreen("practice");
 }
 
-function beginSession() {
-  state.completedExerciseIds = [];
-  state.sessionMode = "full";
-  beginBlock("technique", 0, true);
-}
-
-function finishSession() {
-  updateStreakOnSessionComplete();
-  const doneCount = state.completedExerciseIds.length;
-  document.getElementById("sessionSummary").textContent =
-    `You completed ${doneCount} exercise${doneCount === 1 ? "" : "s"} in ${keyLabel(state.selectedKey)}.`;
-  renderGlobalMeta();
-  renderCircle();
-  renderLessons();
-  showScreen("complete");
-}
-
 function tickTimer() {
   if (!state.timerRunning) return;
-
-  if (state.blockSecondsRemaining > 0) {
-    state.blockSecondsRemaining -= 1;
+  state.blockSecondsRemaining += 1;
+  addPracticeSecond();
+  renderSessionTimerControls();
+  if (state.screen === "practice") {
     document.getElementById("timerText").textContent = formatTime(state.blockSecondsRemaining);
-    return;
   }
-
-  if (state.sessionMode === "full" && state.block === "technique") {
-    beginBlock("song", 0, true);
-    return;
+  if (state.screen === "history") {
+    renderHistory();
   }
-
-  state.timerRunning = false;
-  finishSession();
+  renderGlobalMeta();
+  saveState();
 }
 
 function toggleTimer() {
   state.timerRunning = !state.timerRunning;
+  if (state.timerRunning) {
+    state.timerSessionActive = true;
+  }
+  renderSessionTimerControls();
   renderPractice();
+}
+
+function startSessionTimer() {
+  state.timerRunning = true;
+  state.timerSessionActive = true;
+  renderSessionTimerControls();
+  renderPractice();
+}
+
+function pauseSessionTimer() {
+  state.timerRunning = false;
+  renderSessionTimerControls();
+  renderPractice();
+  saveState();
+}
+
+function resetSessionTimer() {
+  state.timerRunning = false;
+  state.timerSessionActive = false;
+  state.blockSecondsRemaining = 0;
+  renderSessionTimerControls();
+  renderPractice();
+  renderGlobalMeta();
+  saveState();
 }
 
 function openLessonsForKey(keyName) {
@@ -1038,9 +1242,25 @@ function openLessonsForKey(keyName) {
   saveState();
   renderLessons();
   showScreen("lessons");
+  renderNav();
 }
 
 function wireEvents() {
+  document.getElementById("navCircleBtn").addEventListener("click", () => {
+    showScreen("circle");
+    renderNav();
+  });
+  document.getElementById("navLessonsBtn").addEventListener("click", () => {
+    showScreen("lessons");
+    renderLessons();
+    renderNav();
+  });
+  document.getElementById("navHistoryBtn").addEventListener("click", () => {
+    showScreen("history");
+    renderHistory();
+    renderNav();
+  });
+
   document.getElementById("circleOfFifths").addEventListener("click", (event) => {
     const btn = event.target.closest("button[data-key]");
     if (!btn) return;
@@ -1051,6 +1271,7 @@ function wireEvents() {
     renderCircle();
     renderGlobalMeta();
     showScreen("circle");
+    renderNav();
   });
 
   document.getElementById("toggleKeyCompleteBtn").addEventListener("click", () => {
@@ -1061,17 +1282,9 @@ function wireEvents() {
     renderCircle();
   });
 
-  document.getElementById("startSessionBtn").addEventListener("click", beginSession);
-
-  document.getElementById("startTechniqueBtn").addEventListener("click", () => {
-    state.sessionMode = "custom";
-    beginBlock("technique", 0, false);
-  });
-
-  document.getElementById("startSongBtn").addEventListener("click", () => {
-    state.sessionMode = "custom";
-    beginBlock("song", 0, false);
-  });
+  document.getElementById("sessionStartBtn").addEventListener("click", startSessionTimer);
+  document.getElementById("sessionPauseBtn").addEventListener("click", pauseSessionTimer);
+  document.getElementById("sessionResetBtn").addEventListener("click", resetSessionTimer);
 
   document.getElementById("lessonExerciseList").addEventListener("click", (event) => {
     const btn = event.target.closest("button[data-action='start-lesson']");
@@ -1079,7 +1292,7 @@ function wireEvents() {
     state.sessionMode = "custom";
     const block = btn.dataset.block === "song" ? "song" : "technique";
     const index = Number.parseInt(btn.dataset.index || "0", 10) || 0;
-    beginBlock(block, index, false);
+    beginBlock(block, index);
   });
 
   document.getElementById("arpeggioModeButtons").addEventListener("click", (event) => {
@@ -1098,6 +1311,16 @@ function wireEvents() {
     const nextMode = btn.dataset.scaleMode || "";
     if (!SCALE_MODES.some((mode) => mode.id === nextMode)) return;
     state.scaleMode = nextMode;
+    saveState();
+    renderPractice();
+  });
+
+  document.getElementById("scaleHandButtons").addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-scale-hand]");
+    if (!btn) return;
+    const nextHand = btn.dataset.scaleHand || "";
+    if (!SCALE_HANDS.some((mode) => mode.id === nextHand)) return;
+    state.scaleHand = nextHand;
     saveState();
     renderPractice();
   });
@@ -1139,25 +1362,43 @@ function wireEvents() {
   });
 
   document.getElementById("backToLessonsBtn").addEventListener("click", () => {
-    state.timerRunning = false;
     renderLessons();
     showScreen("lessons");
+    renderNav();
   });
 
   document.getElementById("finishBtn").addEventListener("click", () => {
     renderLessons();
     showScreen("lessons");
+    renderNav();
   });
 
   document.getElementById("repeatSongBtn").addEventListener("click", () => {
     state.sessionMode = "custom";
-    beginBlock("song", 0, false);
+    beginBlock("song", 0);
   });
 
   document.getElementById("circleFromCompleteBtn").addEventListener("click", () => {
     renderCircle();
     renderGlobalMeta();
     showScreen("circle");
+    renderNav();
+  });
+
+  document.getElementById("historyPrevMonthBtn").addEventListener("click", () => {
+    state.historyMonthOffset -= 1;
+    renderHistory();
+  });
+  document.getElementById("historyNextMonthBtn").addEventListener("click", () => {
+    state.historyMonthOffset += 1;
+    renderHistory();
+  });
+  document.getElementById("historyCalendar").addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-history-day]");
+    if (!btn) return;
+    state.selectedHistoryDateKey = btn.dataset.historyDay || null;
+    saveState();
+    renderHistory();
   });
 
   document.getElementById("fullscreenBtn").addEventListener("click", () => {
@@ -1179,22 +1420,12 @@ function init() {
   renderGlobalMeta();
   renderCircle();
   renderLessons();
+  renderHistory();
   renderPractice();
+  renderSessionTimerControls();
   showScreen("circle");
+  renderNav();
   state.intervalId = setInterval(tickTimer, 1000);
 }
 
 init();
-  if (rootFingerMeta) {
-    const showRootMeta = (isInversionLesson || isTriadLesson)
-      && exercise?.rootPitch
-      && Number.isFinite(exercise?.rootFingerLH)
-      && Number.isFinite(exercise?.rootFingerRH);
-    if (showRootMeta) {
-      rootFingerMeta.classList.remove("hidden");
-      rootFingerMeta.textContent = `Root note: ${exercise.rootPitch} · LH root finger: ${exercise.rootFingerLH} · RH root finger: ${exercise.rootFingerRH}`;
-    } else {
-      rootFingerMeta.classList.add("hidden");
-      rootFingerMeta.textContent = "";
-    }
-  }

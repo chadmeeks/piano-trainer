@@ -23,6 +23,10 @@ Build a web app that helps practice piano key-by-key:
 - 88-key full-width keyboard as primary visual anchor.
 - Technique lessons include compact staff above keyboard.
 - Step toggles for triads/inversions avoid overloading chapter navigation.
+- Song lessons now prioritize playalong ergonomics:
+  - sectioned chart + lyrics + mini staff
+  - keyboard visible during playback
+  - playback mode that reduces non-essential UI
 
 ## Implemented Highlights
 
@@ -35,6 +39,17 @@ Build a web app that helps practice piano key-by-key:
 - Triads and inversions have dedicated step chips.
 - Triads/inversions/arpeggios support both-hand color mapping.
 - Root-note and root-finger guidance shown for triads/inversions.
+- Song trainer upgrades:
+  - Song info split from song chart.
+  - Arrange vs Play mode separation.
+  - YouTube sync with play/pause and chart-follow behavior.
+  - Per-song chart timing calibration (`Set Chart Start`, `Tap Next Bar`, reset).
+  - Per-section key/time-signature override editor.
+  - Let It Be expanded to full arrangement sections.
+  - Bar model now supports multiple chord events in one 4/4 bar.
+  - Chord-event chips shown horizontally per bar.
+  - Mini staff draws chord events in beat positions across the bar.
+  - Active chord highlighting is only shown while playback is actively running.
 
 ## Practice Tracking
 
@@ -58,8 +73,9 @@ Build a web app that helps practice piano key-by-key:
 
 ## Suggested Next Work
 
-1. Song lesson UX redesign (currently weaker than technique modules).
-2. Add practice-history filtering (key/module filters).
-3. Add minimum-practice threshold for streak qualification.
-4. Add MIDI input for objective feedback and scoring.
-5. Add progress export/import for backup/recovery.
+1. Add dedicated song-arrangement editor screen (bar/chord-event timing, section mapping).
+2. Improve Let It Be bar-level timing map to lock tightly to the selected recording.
+3. Add practice-history filtering (key/module filters).
+4. Add minimum-practice threshold for streak qualification.
+5. Add MIDI input for objective feedback and scoring.
+6. Add progress export/import for backup/recovery.

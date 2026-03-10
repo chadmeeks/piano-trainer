@@ -15,7 +15,9 @@ Top-level shape:
   "scaleHand": "rh",
   "scaleDirection": "up",
   "practiceHistory": {},
-  "selectedHistoryDateKey": null
+  "selectedHistoryDateKey": null,
+  "songTimingOverrides": {},
+  "songSectionOverrides": {}
 }
 ```
 
@@ -57,7 +59,20 @@ Top-level shape:
 - `selectedHistoryDateKey` string or `null`
   - Last selected day on History screen.
 
+- `songTimingOverrides` object
+  - Keyed by song exercise id.
+  - Shape:
+    - `barStarts`: array of numeric seconds (bar start timestamps)
+
+- `songSectionOverrides` object
+  - Keyed by song exercise id.
+  - Shape:
+    - `sections`: object keyed by section name
+      - `keySignature` string
+      - `timeSignature` string
+
 ## Notes
 
 - Transient runtime fields (current screen, indexes, etc.) are not fully persisted.
+- Song playback runtime state (active bar/event, player readiness, video playing flag) is transient and not persisted.
 - Clearing site storage resets progress, preferences, and practice history.

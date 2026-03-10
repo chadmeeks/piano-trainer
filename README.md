@@ -16,10 +16,18 @@ Technical docs live in `docs/`.
   - Technique modules: scales, arpeggios, triads, inversions.
   - Song modules per key (C has named songs, other keys use placeholder drills).
   - Per-lesson toggles for scale/arpeggio/triad/inversion variations.
+  - Song trainer split into:
+    - Song info card (title, artist, key, time signature, progression, arrangement, credits)
+    - Song chart card (sectioned bars, chord events, lyrics, mini staff)
+    - Always-on keyboard in play mode
 - Practice visuals:
   - Full-width 88-key keyboard with overlaid black keys.
   - Finger overlays and LH/RH color coding for both-hand lessons.
   - Technique staff above keyboard.
+  - Song mini staff:
+    - beat-aligned chord-event notation per bar
+    - active-event highlight while video is playing
+    - inactive state when playback is not running
 - History workflow:
   - Dedicated `History` screen (not embedded in lessons).
   - Calendar showing practiced days and lessons viewed per day.
@@ -42,6 +50,7 @@ npm start
 - Runtime state is browser-local via `localStorage` (`pianoTrainerV2`).
 - Server is a static file server (`server.js`) with no backend API routes.
 - This is a local prototype focused on iteration speed.
+- Song timing calibration and section key/time-signature overrides are persisted per song.
 
 ## Documentation
 

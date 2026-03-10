@@ -21,6 +21,10 @@
 - Triads/Inversions:
   - step chips for internal progression
   - `Prev/Next` does not cycle internal steps
+- Songs:
+  - song info and song chart are separate cards
+  - explicit play vs arrange mode split
+  - playback mode emphasizes chart + keyboard visibility
 
 ## Visual Guidance Decisions
 
@@ -28,6 +32,9 @@
 - Technique staff shown above keyboard.
 - Both-hand lessons use LH/RH color coding.
 - Root-note emphasis + root-finger guidance added for triads/inversions.
+- Song bars support multiple chord events and display them as horizontal chips.
+- Song mini staff uses beat-aligned event rendering (time-signature aware).
+- Active chord/event highlight appears only while playback is actively running.
 
 ## Practice Tracking Decisions
 
@@ -40,9 +47,14 @@
   - longest streak
   - practiced-day count
   - month calendar + day details
+- Song-specific calibration decisions:
+  - chart timing is calibrated from playback (`Set Chart Start`, `Tap Next Bar`)
+  - calibration is persisted per song
+  - section key/time signatures are editable and persisted per song
 
 ## Tradeoffs Accepted
 
 - Local-only state over cloud sync.
 - Lightweight custom notation rendering over external notation libraries.
 - Manual practice workflow over objective score/evaluation (for now).
+- Song arrangement currently maintained in code data structures, not a dedicated editor UI yet.

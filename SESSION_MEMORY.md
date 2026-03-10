@@ -1,6 +1,6 @@
 # Piano Trainer - Session Memory
 
-Last updated: 2026-03-07
+Last updated: 2026-03-10
 Repo: `git@github.com:chadmeeks/piano-trainer.git`
 Primary branch: `main`
 
@@ -23,6 +23,15 @@ Primary branch: `main`
     - arpeggios: LH/RH octave modes + both
     - triads: step chips
     - inversions: step chips
+  - song trainer:
+    - Song info card and Song chart card are separated.
+    - Song chart grouped by sections (Intro/Verse/Chorus/etc).
+    - Play mode keeps keyboard visible and chart scrolls independently.
+    - Playback mode supports play/pause, enter/exit, and optional video visibility.
+    - Bar cards support multiple chord events in one bar.
+    - Chord-event chips render horizontally per bar.
+    - Mini staff renders beat-aligned chord events with time-signature guides.
+    - Active chord highlighting is shown only while playback is actively playing.
 
 ## Important interaction model
 
@@ -42,6 +51,21 @@ Primary branch: `main`
   - practiced-day count
   - month calendar + day details
 
+## Song trainer state model
+
+- Per-song timing calibration persisted in `songTimingOverrides[exerciseId].barStarts`.
+- Per-song section metadata persisted in `songSectionOverrides[exerciseId].sections`.
+- Song follow-along runtime tracks:
+  - `activeMeasureIndex`
+  - `activeChordEventIndex`
+  - `videoPlaying`
+
+## Let It Be specifics
+
+- Song arrangement in code now follows:
+  - `Intro -> A B A B Solo C B -> Outro`
+- Chart supports bars with multiple chord events and beat-level event highlighting.
+
 ## Files that matter most
 
 - Frontend state/logic: `public/app.js`
@@ -51,11 +75,12 @@ Primary branch: `main`
 
 ## Last pushed commit
 
-- `8cb0f9b` - Refine lessons UX, timer/history, and technique toggles
+- `f7478f4` - Refine song chart playback cues and multi-chord bar notation
 
 ## Suggested next steps
 
-1. Song module redesign and parity with technique lesson quality.
-2. History filtering by key/module and richer analytics.
-3. Streak threshold tuning (e.g., minimum minutes/day).
-4. MIDI-based scoring and objective mastery signals.
+1. Build dedicated song-arrangement tooling (section/bar/chord-event editor).
+2. Tighten Let It Be timing calibration against recording transitions.
+3. History filtering by key/module and richer analytics.
+4. Streak threshold tuning (e.g., minimum minutes/day).
+5. MIDI-based scoring and objective mastery signals.

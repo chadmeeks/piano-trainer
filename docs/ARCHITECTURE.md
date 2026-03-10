@@ -20,6 +20,10 @@
 - Curriculum domain:
   - Scales, arpeggios, triads, inversions, songs
   - Module-specific transforms/toggles
+  - Song trainer:
+    - structured sections + measures
+    - per-measure chord events (beat-based)
+    - song/player sync + chart follow-along
 - Practice telemetry domain:
   - Timer state
   - Per-day practice seconds
@@ -35,6 +39,13 @@ Main in-memory + persisted state includes:
   - `arpeggioMode`
   - `scaleHand`, `scaleMode`, `scaleDirection`
   - `chordStepIndex`, `inversionStepIndex`
+  - song mode/control:
+    - `songTrainerMode`
+    - `songPlayalongFocus`
+    - `songShowVideoInPlayMode`
+    - `selectedSongSection`
+    - `songTimingOverrides`
+    - `songSectionOverrides`
 - Timer/session:
   - `blockSecondsRemaining`
   - `timerRunning`, `timerSessionActive`
@@ -61,6 +72,9 @@ Main in-memory + persisted state includes:
   - arpeggio mode
   - triad step
   - inversion step
+  - song transforms:
+    - apply timing override to measure starts/ends
+    - apply per-section key/time-signature overrides
 
 4. Practice tracking:
 - Timer tick increments daily `seconds`.
@@ -81,10 +95,17 @@ Main in-memory + persisted state includes:
   - note mapping from diatonic index
   - ledger line generation for out-of-staff notes
   - optional LH/RH color legend
+- Song chart/staff:
+  - sectioned chart blocks (Intro/Verse/Chorus/etc)
+  - measure cards with horizontal chord-event chips
+  - per-bar mini staff timelines with beat guides and time signature
+  - active chord-event highlight only while media playback state is `PLAYING`
+  - chart follow logic pins active row at top during play mode
 
 ## 6) Known Constraints
 
 - No backend API or cloud sync.
 - No auth/multi-user model.
 - History/progress data is browser-local.
-- Song content and song UX are less mature than technique modules.
+- Song arrangement data is hand-authored and still iterative.
+- YouTube alignment quality depends on manual bar-start calibration.

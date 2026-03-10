@@ -96,6 +96,7 @@ const songPlayback = {
   currentVideoId: null,
   currentSongId: null,
   activeMeasureIndex: 0,
+  activeChordEventIndex: 0,
   videoPlaying: false,
   notationRafId: null,
   calibrationSongId: null,
@@ -376,7 +377,61 @@ function inversionRomanSuffix(inversion) {
   return "";
 }
 
-function buildSongMeasure(chordSymbol, roman, lyric, startSec, endSec, inversion = "root") {
+function beatsPerBarFromTimeSignature(timeSignature) {
+  const top = Number.parseInt(String(timeSignature || "").split("/")[0], 10);
+  return Number.isFinite(top) && top > 0 ? top : 4;
+}
+
+function normalizeChordEventBeats(chordInputs, beatsPerBar = 4) {
+  if (!Array.isArray(chordInputs) || !chordInputs.length) return [];
+  const normalized = chordInputs.map((row, index) => {
+    const fallbackBeatStart = index === 0 ? 1 : null;
+    const rawBeatStart = Number(row?.beatStart);
+    const beatStart = Number.isFinite(rawBeatStart) && rawBeatStart > 0
+      ? rawBeatStart
+      : fallbackBeatStart;
+    const rawBeatLength = Number(row?.beatLength);
+    const beatLength = Number.isFinite(rawBeatLength) && rawBeatLength > 0
+      ? rawBeatLength
+      : null;
+    return {
+      ...row,
+      beatStart,
+      beatLength
+    };
+  });
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    if (!Number.isFinite(normalized[i].beatStart)) {
+      if (i === 0) normalized[i].beatStart = 1;
+      else {
+        const prev = normalized[i - 1];
+        const prevEnd = Number(prev.beatStart || 1) + Number(prev.beatLength || 0);
+        normalized[i].beatStart = prevEnd > 0 ? prevEnd : 1;
+      }
+    }
+  }
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    const row = normalized[i];
+    if (!Number.isFinite(row.beatLength)) {
+      const next = normalized[i + 1];
+      const nextStart = Number(next?.beatStart);
+      if (Number.isFinite(nextStart) && nextStart > row.beatStart) {
+        row.beatLength = nextStart - row.beatStart;
+      } else {
+        row.beatLength = (beatsPerBar + 1) - row.beatStart;
+      }
+    }
+    row.beatStart = Math.max(1, Math.min(beatsPerBar, row.beatStart));
+    const maxLength = (beatsPerBar + 1) - row.beatStart;
+    row.beatLength = Math.max(0.25, Math.min(maxLength, row.beatLength));
+  }
+
+  return normalized;
+}
+
+function buildSongChordEvent(chordSymbol, roman, lyric, startSec, endSec, inversion = "root", beatStart = 1, beatLength = 4) {
   const chordDefs = {
     C: { rootMidi: 60, quality: "major" },
     G: { rootMidi: 67, quality: "major" },
@@ -410,6 +465,8 @@ function buildSongMeasure(chordSymbol, roman, lyric, startSec, endSec, inversion
     inversion,
     inversionLabel: inversionLabel(inversion),
     lyric,
+    beatStart,
+    beatLength,
     startSec,
     endSec,
     staffNotes: staffTriadRh.map((m) => midiToNoteName(m)),
@@ -419,6 +476,87 @@ function buildSongMeasure(chordSymbol, roman, lyric, startSec, endSec, inversion
     rootNotes: [midiToNoteName(lhRootMidi), midiToNoteName(rhRootMidi)],
     rootHands: ["LH", "RH"]
   };
+}
+
+function hydrateSongMeasureTiming(measure, fallbackTimeSignature = "4/4") {
+  if (!measure || typeof measure !== "object") return measure;
+  const startSec = Number(measure.startSec || 0);
+  const endSec = Number(measure.endSec || startSec);
+  const durationSec = Math.max(0, endSec - startSec);
+  const timeSignature = measure.sectionTimeSignature || measure.timeSignature || fallbackTimeSignature || "4/4";
+  const beatsPerBar = beatsPerBarFromTimeSignature(timeSignature);
+  const rawEvents = Array.isArray(measure.chordEvents) && measure.chordEvents.length
+    ? measure.chordEvents
+    : [{
+      chord: measure.chordSymbol,
+      roman: measure.roman,
+      inversion: measure.inversion || "root",
+      lyric: measure.lyric || "",
+      beatStart: 1,
+      beatLength: beatsPerBar
+    }];
+  const beats = normalizeChordEventBeats(rawEvents, beatsPerBar);
+  measure.chordEvents = beats.map((event) => {
+    const eventStart = startSec + ((event.beatStart - 1) / beatsPerBar) * durationSec;
+    const eventEnd = startSec + ((event.beatStart - 1 + event.beatLength) / beatsPerBar) * durationSec;
+    return buildSongChordEvent(
+      event.chord || event.chordSymbol || "C",
+      event.roman || "I",
+      event.lyric || "",
+      Number(eventStart.toFixed(2)),
+      Number(eventEnd.toFixed(2)),
+      event.inversion || "root",
+      Number(event.beatStart),
+      Number(event.beatLength)
+    );
+  });
+  const primary = measure.chordEvents[0] || buildSongChordEvent("C", "I", "", startSec, endSec, "root", 1, beatsPerBar);
+  measure.chordSymbol = primary.chordSymbol;
+  measure.chordDisplay = primary.chordDisplay;
+  measure.roman = primary.roman;
+  measure.romanDisplay = primary.romanDisplay;
+  measure.inversion = primary.inversion;
+  measure.inversionLabel = primary.inversionLabel;
+  measure.staffNotes = primary.staffNotes;
+  measure.notes = primary.notes;
+  measure.fingering = primary.fingering;
+  measure.handAssignments = primary.handAssignments;
+  measure.rootNotes = primary.rootNotes;
+  measure.rootHands = primary.rootHands;
+  if (!measure.lyric) {
+    const eventLyric = measure.chordEvents.find((event) => event.lyric)?.lyric || "";
+    measure.lyric = eventLyric;
+  }
+  return measure;
+}
+
+function buildSongMeasure(barSpec, startSec, endSec, timeSignature = "4/4") {
+  const measure = {
+    lyric: barSpec?.lyric || "",
+    startSec,
+    endSec,
+    chordEvents: Array.isArray(barSpec?.chords) && barSpec.chords.length
+      ? barSpec.chords.map((row) => ({
+        chord: row.chord,
+        roman: row.roman,
+        inversion: row.inversion || "root",
+        lyric: row.lyric || "",
+        beatStart: row.beatStart,
+        beatLength: row.beatLength
+      }))
+      : [{
+        chord: barSpec?.chord || "C",
+        roman: barSpec?.roman || "I",
+        inversion: barSpec?.inversion || "root",
+        lyric: barSpec?.lyric || "",
+        beatStart: 1,
+        beatLength: beatsPerBarFromTimeSignature(timeSignature)
+      }],
+    section: barSpec?.section || "",
+    formTag: barSpec?.formTag || "",
+    sectionTimeSignature: barSpec?.sectionTimeSignature || timeSignature
+  };
+  return hydrateSongMeasureTiming(measure, timeSignature);
 }
 
 function buildLetItBeSongData() {
@@ -433,18 +571,12 @@ function buildLetItBeSongData() {
       const index = measures.length;
       const startSec = Number((chartStartSec + index * secondsPerBar).toFixed(2));
       const endSec = Number((chartStartSec + (index + 1) * secondsPerBar).toFixed(2));
-      const measure = buildSongMeasure(
-        bar.chord,
-        bar.roman,
-        bar.lyric || "",
-        startSec,
-        endSec,
-        bar.inversion || "root"
-      );
+      const measure = buildSongMeasure(bar, startSec, endSec, timeSignature);
       measure.section = sectionName;
       measure.formTag = formTag;
       measure.sectionTimeSignature = timeSignature;
       measure.sectionKeySignature = keySignature;
+      hydrateSongMeasureTiming(measure, timeSignature);
       measures.push(measure);
     }
     const sectionEndSec = Number((chartStartSec + measures.length * secondsPerBar).toFixed(2));
@@ -459,7 +591,13 @@ function buildLetItBeSongData() {
   }
 
   pushSection("Intro", "Intro", [
-    { chord: "C", roman: "I", inversion: "root", lyric: "" },
+    {
+      lyric: "",
+      chords: [
+        { chord: "C", roman: "I", inversion: "root", beatStart: 1, beatLength: 2 },
+        { chord: "C", roman: "I", inversion: "1st", beatStart: 3, beatLength: 2 }
+      ]
+    },
     { chord: "G", roman: "V", inversion: "1st", lyric: "" },
     { chord: "Am", roman: "vi", inversion: "1st", lyric: "" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "" }
@@ -468,12 +606,12 @@ function buildLetItBeSongData() {
   pushSection("Verse 1", "A", [
     { chord: "C", roman: "I", inversion: "root", lyric: "When I find myself" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "in times of trouble" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "Mother Mary" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "comes to me" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "Speaking words" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "of wisdom" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "let it be" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "" }
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "Mother Mary comes to me" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "speaking words of wisdom" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "let it be" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "And in my hour of darkness" },
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "she is standing right in front of me" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "speaking words of wisdom, let it be" }
   ], "4/4", "C Major");
 
   pushSection("Chorus 1", "B", [
@@ -488,14 +626,14 @@ function buildLetItBeSongData() {
   ], "4/4", "C Major");
 
   pushSection("Verse 2", "A", [
-    { chord: "C", roman: "I", inversion: "root", lyric: "And in my hour" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "of darkness" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "she is standing" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "right in front of me" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "Speaking words" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "of wisdom" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "let it be" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "" }
+    { chord: "C", roman: "I", inversion: "root", lyric: "And when the broken-hearted people" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "living in the world agree" },
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "there will be an answer" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "For though they may be parted" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "there is still a chance that they will see" },
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "there will be an answer" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" }
   ], "4/4", "C Major");
 
   pushSection("Chorus 2", "B", [
@@ -503,31 +641,31 @@ function buildLetItBeSongData() {
     { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
     { chord: "C", roman: "I", inversion: "root", lyric: "let it be" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "Whisper words" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "of wisdom" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "" }
-  ], "4/4", "C Major");
-
-  pushSection("Bridge", "C", [
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "And when the broken-hearted people" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "living in the world agree" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "There will be an answer" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "let it be" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "For though they may be parted" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "there is still a chance that they will see" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "There will be an answer" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "Yeah there will be an answer" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "whisper words of wisdom" },
     { chord: "C", roman: "I", inversion: "root", lyric: "let it be" }
   ], "4/4", "C Major");
 
-  pushSection("Verse 3", "A", [
+  pushSection("Solo", "Solo", [
+    { chord: "C", roman: "I", inversion: "root", lyric: "" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "" },
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "" }
+  ], "4/4", "C Major");
+
+  pushSection("Verse 3", "C", [
     { chord: "C", roman: "I", inversion: "root", lyric: "And when the night is cloudy" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "there is still a light that shines on me" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "Shine until tomorrow" },
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "shine until tomorrow" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
     { chord: "C", roman: "I", inversion: "root", lyric: "I wake up to the sound of music" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "Mother Mary comes to me" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "Speaking words of wisdom" },
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "speaking words of wisdom" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" }
   ], "4/4", "C Major");
 
@@ -539,17 +677,13 @@ function buildLetItBeSongData() {
     { chord: "C", roman: "I", inversion: "root", lyric: "Whisper words" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "of wisdom" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "" }
+    { chord: "C", roman: "I", inversion: "root", lyric: "there will be an answer, let it be" }
   ], "4/4", "C Major");
 
   pushSection("Outro", "Outro", [
-    { chord: "C", roman: "I", inversion: "root", lyric: "Let it be" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
-    { chord: "Am", roman: "vi", inversion: "1st", lyric: "let it be" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
     { chord: "C", roman: "I", inversion: "root", lyric: "Whisper words of wisdom" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
     { chord: "C", roman: "I", inversion: "root", lyric: "" }
   ], "4/4", "C Major");
 
@@ -630,7 +764,12 @@ function cloneSongData(songData) {
   return {
     ...songData,
     formSections: Array.isArray(songData.formSections) ? songData.formSections.map((row) => ({ ...row })) : [],
-    measures: Array.isArray(songData.measures) ? songData.measures.map((row) => ({ ...row })) : []
+    measures: Array.isArray(songData.measures)
+      ? songData.measures.map((row) => ({
+        ...row,
+        chordEvents: Array.isArray(row?.chordEvents) ? row.chordEvents.map((event) => ({ ...event })) : []
+      }))
+      : []
   };
 }
 
@@ -696,6 +835,7 @@ function applyTimingOverrideToSongData(songData, override) {
       const fallbackDuration = Number.isFinite(durations[i]) && durations[i] > 0 ? durations[i] : 3.4;
       measure.endSec = Number((measure.startSec + fallbackDuration).toFixed(2));
     }
+    hydrateSongMeasureTiming(measure, measure.sectionTimeSignature || cloned.timeSignature || "4/4");
   }
 
   if (Number.isFinite(cloned.measures[0]?.startSec)) {
@@ -721,6 +861,7 @@ function applySectionOverrideToSongData(songData, override) {
     if (typeof row.keySignature === "string" && row.keySignature.trim()) {
       measure.sectionKeySignature = row.keySignature.trim();
     }
+    hydrateSongMeasureTiming(measure, measure.sectionTimeSignature || cloned.timeSignature || "4/4");
   }
   cloned.formSections = recomputeSongSectionsFromMeasures(cloned);
   return cloned;
@@ -1276,6 +1417,15 @@ function compactChordSymbol(value) {
     .trim();
 }
 
+function chordEventBeatLabel(event) {
+  const start = Number(event?.beatStart);
+  const length = Number(event?.beatLength);
+  if (!Number.isFinite(start) || !Number.isFinite(length)) return "";
+  const end = start + length - 1;
+  if (Math.abs(length - 1) < 0.001) return `Beat ${start}`;
+  return `Beats ${start}-${Number(end.toFixed(2))}`;
+}
+
 function noteNameToMidi(note) {
   const parsed = parseNote(note);
   if (!parsed) return null;
@@ -1295,10 +1445,18 @@ function songHasStructuredChart(exercise) {
   return exercise?.moduleId === "songs" && Array.isArray(exercise?.songData?.measures) && exercise.songData.measures.length > 0;
 }
 
-function renderSongMeasureStaff(notes) {
-  const safeNotes = Array.isArray(notes) ? notes.filter((note) => Boolean(parseNote(note))) : [];
-  const encoded = encodeURIComponent(JSON.stringify(safeNotes));
-  return `<div class="song-measure-staff-notation" data-chord-notes="${encoded}"></div>`;
+function renderSongMeasureStaff(measure, activeEventIndex = -1) {
+  const events = Array.isArray(measure?.chordEvents) && measure.chordEvents.length
+    ? measure.chordEvents
+    : [measure];
+  const encoded = encodeURIComponent(JSON.stringify(events.map((event) => ({
+    staffNotes: Array.isArray(event?.staffNotes) ? event.staffNotes.filter((note) => Boolean(parseNote(note))) : [],
+    beatStart: Number(event?.beatStart || 1),
+    beatLength: Number(event?.beatLength || 1)
+  }))));
+  const timeSignature = String(measure?.sectionTimeSignature || measure?.timeSignature || "4/4");
+  const normalizedActiveEvent = Number.isInteger(activeEventIndex) ? activeEventIndex : -1;
+  return `<div class="song-measure-staff-notation" data-measure-events="${encoded}" data-time-signature="${timeSignature}" data-active-event="${normalizedActiveEvent}"></div>`;
 }
 
 function notationRenderWidth(target) {
@@ -1359,6 +1517,76 @@ function drawVexChordStack(target, notes) {
   drawFallbackChordStack(target, notes);
 }
 
+function drawFallbackMeasureTimeline(target, events, timeSignature = "4/4", activeEventIndex = -1) {
+  const safeEvents = Array.isArray(events) ? events : [];
+  const beatsPerBar = beatsPerBarFromTimeSignature(timeSignature);
+  const width = Math.max(220, notationRenderWidth(target));
+  const height = 124;
+  const staffLines = [20, 38, 56, 74, 92];
+  const staffWidth = Math.max(164, Math.round(width * 0.7));
+  const staffX = Math.round((width - staffWidth) / 2);
+  const leftEdge = staffX + 44;
+  const rightEdge = staffX + staffWidth - 10;
+  const timelineWidth = Math.max(80, rightEdge - leftEdge);
+  const lines = staffLines
+    .map((y) => `<line x1="${staffX}" y1="${y}" x2="${staffX + staffWidth}" y2="${y}" stroke="#6b7f99" stroke-width="1.4" />`)
+    .join("");
+  const clef = `<text x="${staffX - 10}" y="${staffLines[4] + 3}" font-size="112" font-family="'Segoe UI Symbol','Arial Unicode MS',serif" fill="#3a5778">𝄞</text>`;
+  const timeSigCenterY = ((staffLines[1] + staffLines[3]) / 2) + 2;
+  const timeSigTopY = timeSigCenterY - 8;
+  const timeSigBottomY = timeSigCenterY + 8;
+  const timeSig = `<text x="${staffX + 28}" y="${timeSigTopY}" font-size="16.5" font-weight="700" fill="#2f4764">${beatsPerBar}</text><text x="${staffX + 28}" y="${timeSigBottomY}" font-size="16.5" font-weight="700" fill="#2f4764">${String(timeSignature).split("/")[1] || "4"}</text>`;
+  const beatGuides = Array.from({ length: beatsPerBar + 1 }, (_, i) => {
+    const x = leftEdge + (i / beatsPerBar) * timelineWidth;
+    return `<line x1="${x}" y1="${staffLines[0] - 5}" x2="${x}" y2="${staffLines[4] + 5}" stroke="${i === 0 || i === beatsPerBar ? "#5e7592" : "#cfdae9"}" stroke-width="${i === 0 || i === beatsPerBar ? "1.4" : "1"}" />`;
+  }).join("");
+
+  const baseIndex = diatonicIndex("E4");
+  const stepY = 9;
+  const topLine = staffLines[0];
+  const bottomLine = staffLines[4];
+  const ledgerNodes = [];
+  const noteNodes = [];
+
+  safeEvents.forEach((event, eventIndex) => {
+    const centerBeat = Math.max(0.25, Math.min(beatsPerBar, Number(event?.beatStart || 1) - 1 + (Number(event?.beatLength || 1) / 2)));
+    const x = leftEdge + (centerBeat / beatsPerBar) * timelineWidth;
+    const notes = Array.isArray(event?.staffNotes) ? event.staffNotes : [];
+    const mapped = notes
+      .map((note) => {
+        const idx = diatonicIndex(note);
+        if (!Number.isFinite(idx) || !Number.isFinite(baseIndex)) return null;
+        return { y: staffLines[4] - (idx - baseIndex) * stepY };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.y - b.y);
+
+    const isActive = eventIndex === activeEventIndex;
+    const fill = isActive ? "#ff9f1a" : "#1f5ea7";
+    const stroke = isActive ? "#7a3f00" : "#0f3a66";
+
+    mapped.forEach((pos) => {
+      if (pos.y < topLine) {
+        for (let y = topLine - 18; y >= pos.y; y -= 18) {
+          ledgerNodes.push(`<line x1="${x - 14}" y1="${y}" x2="${x + 14}" y2="${y}" stroke="#6b7f99" stroke-width="1.1" />`);
+        }
+      } else if (pos.y > bottomLine) {
+        for (let y = bottomLine + 18; y <= pos.y; y += 18) {
+          ledgerNodes.push(`<line x1="${x - 14}" y1="${y}" x2="${x + 14}" y2="${y}" stroke="#6b7f99" stroke-width="1.1" />`);
+        }
+      }
+      noteNodes.push(`
+        <g transform="translate(${x} ${pos.y}) rotate(-14)">
+          ${isActive ? `<ellipse cx="0" cy="0" rx="13.8" ry="11.1" fill="#ffd28a" opacity="0.58" />` : ""}
+          <ellipse cx="0" cy="0" rx="10.6" ry="8.1" fill="${fill}" stroke="${stroke}" stroke-width="${isActive ? "2.1" : "1.4"}" />
+        </g>
+      `);
+    });
+  });
+
+  target.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Measure staff with beat-aligned chord events">${lines}${beatGuides}${clef}${timeSig}${ledgerNodes.join("")}${noteNodes.join("")}</svg>`;
+}
+
 function renderSongMeasureNotationNodes() {
   if (songPlayback.notationRafId) {
     cancelAnimationFrame(songPlayback.notationRafId);
@@ -1367,21 +1595,65 @@ function renderSongMeasureNotationNodes() {
   songPlayback.notationRafId = requestAnimationFrame(() => {
     const nodes = Array.from(document.querySelectorAll(".song-measure-staff-notation"));
     for (const node of nodes) {
-      const raw = node.getAttribute("data-chord-notes") || "";
-      let notes = [];
+      const rawMeasureEvents = node.getAttribute("data-measure-events") || "";
+      const rawChordNotes = node.getAttribute("data-chord-notes") || "";
+      const timeSignature = node.getAttribute("data-time-signature") || "4/4";
+      const activeEventIndex = Number.parseInt(node.getAttribute("data-active-event") || "-1", 10);
+      let measureEvents = [];
+      let chordNotes = [];
       try {
-        const parsed = JSON.parse(decodeURIComponent(raw));
-        notes = Array.isArray(parsed) ? parsed : [];
+        const parsed = JSON.parse(decodeURIComponent(rawMeasureEvents));
+        measureEvents = Array.isArray(parsed) ? parsed : [];
       } catch {
-        notes = [];
+        measureEvents = [];
       }
-      drawVexChordStack(node, notes);
+      try {
+        const parsed = JSON.parse(decodeURIComponent(rawChordNotes));
+        chordNotes = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        chordNotes = [];
+      }
+      if (measureEvents.length) {
+        drawFallbackMeasureTimeline(node, measureEvents, timeSignature, Number.isInteger(activeEventIndex) ? activeEventIndex : 0);
+      } else {
+        drawVexChordStack(node, chordNotes);
+      }
     }
     songPlayback.notationRafId = null;
   });
 }
 
-function buildSongMeasureExercise(exercise, measureIndex) {
+function chordEventForMeasure(measure, eventIndex = 0) {
+  const events = Array.isArray(measure?.chordEvents) && measure.chordEvents.length
+    ? measure.chordEvents
+    : null;
+  if (!events) return measure || null;
+  const bounded = Math.max(0, Math.min(events.length - 1, eventIndex));
+  return events[bounded] || events[0] || null;
+}
+
+function updateMeasureCardDisplay(measureEl, measure, eventIndex = -1) {
+  if (!measureEl || !measure) return;
+  const event = chordEventForMeasure(measure, eventIndex) || measure;
+  const lyricEl = measureEl.querySelector(".song-lyric");
+  const beatsEl = measureEl.querySelector(".song-event-beats");
+  const metaEl = measureEl.querySelector(".song-event-meta");
+  const notationEl = measureEl.querySelector(".song-measure-staff-notation");
+  measureEl.querySelectorAll(".song-chord-event-chip").forEach((chip) => {
+    const chipEvent = Number.parseInt(chip.getAttribute("data-song-event") || "-1", 10);
+    chip.classList.toggle("active", chipEvent === eventIndex);
+  });
+
+  if (beatsEl) beatsEl.textContent = chordEventBeatLabel(event);
+  if (metaEl) metaEl.textContent = `${event?.romanDisplay || event?.roman || ""} · ${event?.inversionLabel || "Root position"}`;
+  if (lyricEl) lyricEl.textContent = event?.lyric || measure?.lyric || " ";
+  if (notationEl) {
+    const normalizedActiveEvent = Number.isInteger(eventIndex) ? eventIndex : -1;
+    notationEl.setAttribute("data-active-event", String(normalizedActiveEvent));
+  }
+}
+
+function buildSongMeasureExercise(exercise, measureIndex, chordEventIndex = 0) {
   if (!songHasStructuredChart(exercise)) return exercise;
   const measures = exercise.songData.measures;
   if (measureIndex < 0) {
@@ -1398,15 +1670,20 @@ function buildSongMeasureExercise(exercise, measureIndex) {
   }
   const boundedIndex = Math.max(0, Math.min(measures.length - 1, measureIndex));
   const measure = measures[boundedIndex];
+  const event = chordEventForMeasure(measure, chordEventIndex) || measure;
+  const eventCount = Array.isArray(measure?.chordEvents) ? measure.chordEvents.length : 1;
+  const eventLabel = eventCount > 1
+    ? ` · Chord ${Math.max(1, Number(chordEventIndex) + 1)}/${eventCount}`
+    : "";
   return {
     ...exercise,
-    notes: measure.notes,
-    fingering: measure.fingering,
-    handAssignments: measure.handAssignments,
-    rootNotes: measure.rootNotes,
-    rootHands: measure.rootHands,
-    meta: `${exercise.songData.songKey || "Song"} · ${compactChordSymbol(measure.chordDisplay || measure.chordSymbol)} (${measure.romanDisplay || measure.roman}) · ${measure.inversionLabel} · Bar ${boundedIndex + 1}/${measures.length}`,
-    hint: `${exercise.hint} ${measure.lyric ? `Lyric cue: "${measure.lyric}"` : ""}`.trim()
+    notes: Array.isArray(event?.notes) ? event.notes : [],
+    fingering: Array.isArray(event?.fingering) ? event.fingering : [],
+    handAssignments: Array.isArray(event?.handAssignments) ? event.handAssignments : [],
+    rootNotes: Array.isArray(event?.rootNotes) ? event.rootNotes : [],
+    rootHands: Array.isArray(event?.rootHands) ? event.rootHands : [],
+    meta: `${exercise.songData.songKey || "Song"} · ${compactChordSymbol(event?.chordDisplay || event?.chordSymbol)} (${event?.romanDisplay || event?.roman}) · ${event?.inversionLabel || "Root position"} · Bar ${boundedIndex + 1}/${measures.length}${eventLabel}`,
+    hint: `${exercise.hint} ${(event?.lyric || measure?.lyric) ? `Lyric cue: "${event?.lyric || measure?.lyric}"` : ""}`.trim()
   };
 }
 
@@ -1420,6 +1697,29 @@ function getMeasureIndexForTime(measures, timeSec) {
   return timeSec >= Number(measures[measures.length - 1].endSec || 0) ? measures.length - 1 : 0;
 }
 
+function getChordEventIndexForTime(measure, timeSec) {
+  const events = Array.isArray(measure?.chordEvents) ? measure.chordEvents : [];
+  if (!events.length) return 0;
+  if (!Number.isFinite(timeSec)) return 0;
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    if (timeSec >= Number(event.startSec || 0) && timeSec < Number(event.endSec || 0)) return i;
+  }
+  if (timeSec >= Number(events[events.length - 1].endSec || 0)) return events.length - 1;
+  return 0;
+}
+
+function getMeasureAndChordEventForTime(measures, timeSec) {
+  const measureIndex = getMeasureIndexForTime(measures, timeSec);
+  if (measureIndex < 0 || !Array.isArray(measures) || !measures[measureIndex]) {
+    return { measureIndex, chordEventIndex: 0 };
+  }
+  return {
+    measureIndex,
+    chordEventIndex: getChordEventIndexForTime(measures[measureIndex], timeSec)
+  };
+}
+
 function getYouTubeTimeSec() {
   if (!songPlayback.playerReady || !songPlayback.player || typeof songPlayback.player.getCurrentTime !== "function") return null;
   try {
@@ -1430,13 +1730,17 @@ function getYouTubeTimeSec() {
   }
 }
 
-function updateSongChartHighlight(exercise, measureIndex, timeSec = null) {
+function updateSongChartHighlight(exercise, measureIndex, chordEventIndex = -1, timeSec = null) {
   const chart = document.getElementById("songChart");
   if (chart) {
     chart.querySelectorAll(".song-measure").forEach((el) => {
       const idx = Number.parseInt(el.dataset.songMeasure || "-1", 10);
       el.classList.toggle("active", idx === measureIndex);
+      const measure = exercise?.songData?.measures?.[idx];
+      const showEventIndex = idx === measureIndex ? chordEventIndex : -1;
+      updateMeasureCardDisplay(el, measure, showEventIndex);
     });
+    renderSongMeasureNotationNodes();
 
     const activeEl = measureIndex >= 0
       ? chart.querySelector(`.song-measure[data-song-measure="${measureIndex}"]`)
@@ -1460,9 +1764,12 @@ function updateSongChartHighlight(exercise, measureIndex, timeSec = null) {
 
   const followMeta = document.getElementById("songFollowMeta");
   const measure = exercise?.songData?.measures?.[measureIndex];
+  const event = chordEventForMeasure(measure, chordEventIndex) || measure;
   if (followMeta && measure) {
     const currentTime = Number.isFinite(timeSec) ? `${timeSec.toFixed(1)}s` : "manual";
-    followMeta.textContent = `Bar ${measureIndex + 1}/${exercise.songData.measures.length} · ${compactChordSymbol(measure.chordDisplay || measure.chordSymbol)} (${measure.romanDisplay || measure.roman}) · ${measure.inversionLabel} · ${currentTime}`;
+    const eventCount = Array.isArray(measure?.chordEvents) ? measure.chordEvents.length : 1;
+    const eventText = eventCount > 1 ? ` · Chord ${Math.max(1, chordEventIndex + 1)}/${eventCount}` : "";
+    followMeta.textContent = `Bar ${measureIndex + 1}/${exercise.songData.measures.length}${eventText} · ${compactChordSymbol(event?.chordDisplay || event?.chordSymbol)} (${event?.romanDisplay || event?.roman}) · ${event?.inversionLabel || "Root position"} · ${currentTime}`;
   } else if (followMeta) {
     const startAt = Number(exercise?.songData?.chartStartSec || exercise?.songData?.measures?.[0]?.startSec || 0);
     const currentTime = Number.isFinite(timeSec) ? `${timeSec.toFixed(1)}s` : "manual";
@@ -1472,24 +1779,41 @@ function updateSongChartHighlight(exercise, measureIndex, timeSec = null) {
 
 function syncSongFollowAlong(exercise, force = false) {
   if (!songHasStructuredChart(exercise)) return;
+  if (!songPlayback.videoPlaying) {
+    if (force) {
+      updateSongChartHighlight(exercise, -1, -1, getYouTubeTimeSec());
+    }
+    return;
+  }
   const measures = exercise.songData.measures;
   const timeSec = getYouTubeTimeSec();
-  const nextIndex = Number.isFinite(timeSec)
-    ? getMeasureIndexForTime(measures, timeSec)
-    : Math.max(0, Math.min(measures.length - 1, songPlayback.activeMeasureIndex));
+  const next = Number.isFinite(timeSec)
+    ? getMeasureAndChordEventForTime(measures, timeSec)
+    : {
+      measureIndex: Math.max(0, Math.min(measures.length - 1, songPlayback.activeMeasureIndex)),
+      chordEventIndex: Math.max(0, songPlayback.activeChordEventIndex || 0)
+    };
 
-  if (force || nextIndex !== songPlayback.activeMeasureIndex) {
-    songPlayback.activeMeasureIndex = nextIndex;
-    const keyboardExercise = buildSongMeasureExercise(exercise, nextIndex);
+  if (
+    force
+    || next.measureIndex !== songPlayback.activeMeasureIndex
+    || next.chordEventIndex !== songPlayback.activeChordEventIndex
+  ) {
+    songPlayback.activeMeasureIndex = next.measureIndex;
+    songPlayback.activeChordEventIndex = next.chordEventIndex;
+    const keyboardExercise = buildSongMeasureExercise(exercise, next.measureIndex, next.chordEventIndex);
     renderKeyboard(keyboardExercise);
-    if (nextIndex >= 0) {
-      const measure = measures[nextIndex];
+    if (next.measureIndex >= 0) {
+      const measure = measures[next.measureIndex];
+      const event = chordEventForMeasure(measure, next.chordEventIndex) || measure;
+      const eventCount = Array.isArray(measure?.chordEvents) ? measure.chordEvents.length : 1;
+      const eventText = eventCount > 1 ? ` · Chord ${next.chordEventIndex + 1}/${eventCount}` : "";
       document.getElementById("noteSequence").textContent =
-        `Section: ${measure.section || "Song"} (${measure.formTag || "-"}) · Chord: ${compactChordSymbol(measure.chordDisplay || measure.chordSymbol)} (${measure.romanDisplay || measure.roman}) · ${measure.inversionLabel}${measure.lyric ? ` · Lyric: ${measure.lyric}` : ""}`;
+        `Section: ${measure.section || "Song"} (${measure.formTag || "-"}) · Chord: ${compactChordSymbol(event?.chordDisplay || event?.chordSymbol)} (${event?.romanDisplay || event?.roman}) · ${event?.inversionLabel || "Root position"}${eventText}${(event?.lyric || measure?.lyric) ? ` · Lyric: ${event?.lyric || measure?.lyric}` : ""}`;
     } else {
       document.getElementById("noteSequence").textContent = "Intro lead-in before chart start.";
     }
-    updateSongChartHighlight(exercise, nextIndex, timeSec);
+    updateSongChartHighlight(exercise, next.measureIndex, next.chordEventIndex, timeSec);
   }
 }
 
@@ -1755,6 +2079,7 @@ function setChartStartFromPlayback(exercise) {
   songPlayback.calibrationSongId = exercise.id;
   songPlayback.calibrationNextBarIndex = 1;
   songPlayback.activeMeasureIndex = 0;
+  songPlayback.activeChordEventIndex = 0;
   renderPractice();
 }
 
@@ -1788,6 +2113,7 @@ function resetSongTimingCalibration(exercise) {
   songPlayback.calibrationSongId = exercise.id;
   songPlayback.calibrationNextBarIndex = 0;
   songPlayback.activeMeasureIndex = 0;
+  songPlayback.activeChordEventIndex = 0;
   renderPractice();
 }
 
@@ -1865,7 +2191,12 @@ function renderSongPractice(exercise) {
   renderSongCalibrationMeta(exercise);
   renderSongSectionEditor(exercise);
 
-  const activeIndex = Math.max(-1, Math.min(song.measures.length - 1, songPlayback.activeMeasureIndex));
+  const activeIndex = songPlayback.videoPlaying
+    ? Math.max(-1, Math.min(song.measures.length - 1, songPlayback.activeMeasureIndex))
+    : -1;
+  const activeEventIndex = songPlayback.videoPlaying
+    ? Math.max(0, songPlayback.activeChordEventIndex || 0)
+    : -1;
   const sectionGroups = groupedSongMeasures(song);
   document.getElementById("songChart").innerHTML = sectionGroups.map((group) => `
     <section class="song-section-block">
@@ -1875,14 +2206,32 @@ function renderSongPractice(exercise) {
       </header>
       <div class="song-chart-grid">
         ${group.rows.map(({ measure, index }) => `
-          <button class="song-measure ${index === activeIndex ? "active" : ""}" data-song-measure="${index}">
+          <article class="song-measure ${index === activeIndex ? "active" : ""}" data-song-measure="${index}">
             <p class="song-bar">Bar ${index + 1}</p>
-            <p class="song-chord">${compactChordSymbol(measure.chordDisplay || measure.chordSymbol)}</p>
-            <p class="song-roman">${measure.romanDisplay || measure.roman}</p>
-            <p class="song-inversion">${measure.inversionLabel || "Root position"}</p>
-            <div class="song-measure-staff">${renderSongMeasureStaff(measure.staffNotes)}</div>
-            <p class="song-lyric">${measure.lyric || "&nbsp;"}</p>
-          </button>
+            ${(() => {
+              const displayEvent = chordEventForMeasure(measure, index === activeIndex ? activeEventIndex : 0) || measure;
+              const events = Array.isArray(measure.chordEvents) && measure.chordEvents.length ? measure.chordEvents : [measure];
+              return `
+                <div class="song-chord-events-inline">
+                  ${events.map((event, eventIndex) => `
+                    <button
+                      class="song-chord-event-chip ${(index === activeIndex && activeEventIndex === eventIndex) ? "active" : ""}"
+                      data-song-measure="${index}"
+                      data-song-event="${eventIndex}"
+                      type="button"
+                      title="Bar ${index + 1} ${chordEventBeatLabel(event)}"
+                    >
+                      ${compactChordSymbol(event.chordDisplay || event.chordSymbol)}
+                    </button>
+                  `).join("")}
+                </div>
+                <p class="song-event-meta">${displayEvent.romanDisplay || displayEvent.roman} · ${displayEvent.inversionLabel || "Root position"}</p>
+                <p class="song-event-beats">${chordEventBeatLabel(displayEvent)}</p>
+                <div class="song-measure-staff">${renderSongMeasureStaff(measure, index === activeIndex ? activeEventIndex : -1)}</div>
+                <p class="song-lyric">${displayEvent.lyric || measure.lyric || "&nbsp;"}</p>
+              `;
+            })()}
+          </article>
         `).join("")}
       </div>
     </section>
@@ -1947,7 +2296,7 @@ function renderPractice() {
   renderInversionModes(isInversionLesson, exercise);
 
   const keyboardExercise = (isSongLesson && songHasStructuredChart(exercise))
-    ? buildSongMeasureExercise(exercise, songPlayback.activeMeasureIndex)
+    ? buildSongMeasureExercise(exercise, songPlayback.activeMeasureIndex, songPlayback.activeChordEventIndex)
     : exercise;
   renderKeyboard(keyboardExercise);
   if (isTechniqueLesson) {
@@ -2246,6 +2595,7 @@ function moveExercise(delta) {
     const total = curriculum.songs.length;
     state.songIndex = (state.songIndex + delta + total) % total;
     songPlayback.activeMeasureIndex = 0;
+    songPlayback.activeChordEventIndex = 0;
   }
   renderPractice();
 }
@@ -2260,6 +2610,7 @@ function beginBlock(blockName, index = 0) {
     state.songShowVideoInPlayMode = false;
     songPlayback.videoPlaying = false;
     songPlayback.activeMeasureIndex = 0;
+    songPlayback.activeChordEventIndex = 0;
   }
   state.chordStepIndex = 0;
   state.inversionStepIndex = 0;
@@ -2432,18 +2783,29 @@ function wireEvents() {
   });
 
   document.getElementById("songChart").addEventListener("click", (event) => {
-    const btn = event.target.closest("button[data-song-measure]");
-    if (!btn) return;
-    const measureIndex = Number.parseInt(btn.dataset.songMeasure || "", 10);
+    const chip = event.target.closest(".song-chord-event-chip[data-song-measure][data-song-event]");
+    const measureEl = event.target.closest(".song-measure[data-song-measure]");
+    if (!measureEl) return;
+    const measureIndex = Number.parseInt(
+      measureEl.dataset.songMeasure || "",
+      10
+    );
     if (!Number.isInteger(measureIndex)) return;
     const exercise = currentExercise();
     if (!songHasStructuredChart(exercise)) return;
     const measures = exercise.songData.measures;
     const bounded = Math.max(0, Math.min(measures.length - 1, measureIndex));
+    const measure = measures[bounded];
+    const requestedEventIndex = Number.parseInt(chip?.dataset.songEvent || "0", 10);
+    const events = Array.isArray(measure?.chordEvents) && measure.chordEvents.length ? measure.chordEvents : [measure];
+    const boundedEventIndex = Number.isInteger(requestedEventIndex)
+      ? Math.max(0, Math.min(events.length - 1, requestedEventIndex))
+      : 0;
     songPlayback.activeMeasureIndex = bounded;
-    const targetMeasure = measures[bounded];
+    songPlayback.activeChordEventIndex = boundedEventIndex;
+    const targetEvent = chordEventForMeasure(measure, boundedEventIndex) || measure;
     if (songPlayback.playerReady && songPlayback.player && typeof songPlayback.player.seekTo === "function") {
-      songPlayback.player.seekTo(Number(targetMeasure.startSec || 0), true);
+      songPlayback.player.seekTo(Number(targetEvent.startSec || measure.startSec || 0), true);
     }
     syncSongFollowAlong(exercise, true);
   });

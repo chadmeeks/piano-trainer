@@ -120,7 +120,7 @@
       </section>
 
       <section id="screen-practice" class="screen">
-        <div class="card practice-header">
+        <div id="practiceHeaderCard" class="card practice-header">
           <div>
             <p class="label" id="blockLabel">Technique Block</p>
             <h2 id="exerciseTitle">C Major Scale - Right Hand</h2>
@@ -163,13 +163,78 @@
           <div id="staff" class="staff"></div>
         </article>
 
-        <article class="card keyboard-stage">
+        <article id="songInfoCard" class="card hidden">
+          <p class="label">Song Info</p>
+          <div class="song-info-grid">
+            <div class="song-info-main">
+              <h3 id="songTitle">Song Title</h3>
+              <p id="songArtist" class="muted">Artist</p>
+              <p id="songKeyMeta" class="song-meta-line">Key: C Major</p>
+              <p id="songTimeSignatureMeta" class="song-meta-line">Time Signature: 4/4</p>
+              <p id="songProgressionMeta" class="song-meta-line">Progression: I - V - vi - IV</p>
+              <p id="songArrangementMeta" class="song-meta-line">Arrangement: Intro - A - B - A - B - C - A - B - Outro</p>
+              <p id="songCredits" class="song-credits">Credits</p>
+            </div>
+            <div class="song-player-wrap">
+              <div id="songYoutubePlayer" class="song-youtube-player"></div>
+            </div>
+          </div>
+        </article>
+
+        <article id="songPracticeCard" class="card hidden">
+          <p class="label">Song Chart</p>
+          <div class="song-chart-wrap">
+            <div class="row between wrap">
+              <p class="label">Chart</p>
+              <div class="song-chart-header-controls">
+                <p id="songFollowMeta" class="song-follow-meta">Waiting for playback.</p>
+                <button id="songPlayBtn" class="btn tonal hidden">Play</button>
+                <button id="songPauseBtn" class="btn outlined hidden">Pause</button>
+                <button id="songToggleVideoBtn" class="btn outlined hidden">Show Video</button>
+                <button id="songFocusModeBtn" class="btn outlined">Enter Playback Mode</button>
+              </div>
+            </div>
+            <div id="songModeButtons" class="mode-chip-row song-mode-row">
+              <button class="mode-chip active" data-song-mode="play">Play</button>
+              <button class="mode-chip" data-song-mode="arrange">Arrange</button>
+            </div>
+            <div id="songArrangeTools" class="song-arrange-tools hidden">
+              <div class="song-calibration-controls">
+                <button id="songSetChartStartBtn" class="btn outlined">Set Chart Start To Current Time</button>
+                <button id="songTapNextBarBtn" class="btn tonal">Tap Next Bar</button>
+                <button id="songResetTimingBtn" class="btn outlined">Reset Timing</button>
+                <p id="songCalibrationMeta" class="song-calibration-meta">Calibration: not started.</p>
+              </div>
+              <div class="song-section-editor">
+                <p class="label">Section Settings</p>
+                <div class="song-section-editor-grid">
+                  <label>
+                    Section
+                    <select id="songSectionSelect"></select>
+                  </label>
+                  <label>
+                    Key Signature
+                    <input id="songSectionKeyInput" type="text" value="C Major" />
+                  </label>
+                  <label>
+                    Time Signature
+                    <input id="songSectionTimeInput" type="text" value="4/4" />
+                  </label>
+                  <button id="songApplySectionSettingsBtn" class="btn tonal">Apply Section Settings</button>
+                </div>
+              </div>
+            </div>
+            <div id="songChart" class="song-chart"></div>
+          </div>
+        </article>
+
+        <article id="practiceKeyboardCard" class="card keyboard-stage">
           <p class="label">Keyboard</p>
           <div id="keyboard" class="keyboard"></div>
           <div id="noteSequence" class="sequence"></div>
         </article>
 
-        <div class="card">
+        <div id="practiceControlsCard" class="card">
           <div class="row between wrap">
             <div id="exerciseHint">Play smoothly with steady fingering.</div>
             <div class="row gap">
@@ -195,6 +260,7 @@
       </section>
     </main>
 
+    <script src="https://unpkg.com/vexflow@4.2.3/build/umd/vexflow.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

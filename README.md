@@ -48,9 +48,18 @@ npm start
 ## Notes
 
 - Runtime state is browser-local via `localStorage` (`pianoTrainerV2`).
-- Server is a static file server (`server.js`) with no backend API routes.
+- Server is a local Node app (`server.js`) that serves static assets plus local admin/song-analysis API routes.
 - This is a local prototype focused on iteration speed.
 - Song timing calibration and section key/time-signature overrides are persisted per song.
+
+## Admin + Auto-draft
+
+- `Admin` screen is the arrangement/prep workspace.
+- Lesson flow is playalong-focused; arrangement controls are gated to admin-launched workflow.
+- Auto-draft tools:
+  - `Run Auto-draft Now` runs local analysis and publishes `public/song-drafts.js`.
+  - `Auto-arrange` applies the current auto-draft source version to the song.
+  - Per-bar `Get Chords` analyzes the anchored bar window and can infer slash-chord inversions.
 
 ## Documentation
 

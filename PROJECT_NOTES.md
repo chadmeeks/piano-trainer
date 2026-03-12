@@ -12,6 +12,7 @@ Build a web app that helps practice piano key-by-key:
 - Top-level navigation:
   - Circle
   - Lessons
+  - Admin
   - History
 - Circle of Fifths is the default landing screen.
 - Any key can be selected (no lesson-gating model).
@@ -27,6 +28,7 @@ Build a web app that helps practice piano key-by-key:
   - sectioned chart + lyrics + mini staff
   - keyboard visible during playback
   - playback mode that reduces non-essential UI
+  - lesson entry is playalong-focused (arrange tools are admin-gated)
 
 ## Implemented Highlights
 
@@ -50,6 +52,10 @@ Build a web app that helps practice piano key-by-key:
   - Chord-event chips shown horizontally per bar.
   - Mini staff draws chord events in beat positions across the bar.
   - Active chord highlighting is only shown while playback is actively running.
+  - Timing override storage is now source-scoped by arrangement source id.
+  - Per-bar `Get Chords` action can analyze anchored bar windows and apply detected chord events.
+  - Per-bar chord analysis can infer slash-chord inversions from bass-note estimation.
+  - `Run Auto-draft Now` runs local analysis and streams progress in Admin.
 
 ## Practice Tracking
 
@@ -67,7 +73,9 @@ Build a web app that helps practice piano key-by-key:
 
 ## Architecture Notes
 
-- Single static Node server (`server.js`), no API layer.
+- Node server (`server.js`) now serves static frontend + local API endpoints for:
+  - auto-draft run/status
+  - per-bar chord analysis in arrange mode
 - App state stored in `localStorage` key `pianoTrainerV2`.
 - Core behavior in `public/app.js`.
 

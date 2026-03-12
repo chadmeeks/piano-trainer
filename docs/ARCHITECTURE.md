@@ -3,7 +3,7 @@
 ## 1) Runtime Model
 
 - Stack:
-  - Node.js static file server (`server.js`)
+  - Node.js local server (`server.js`) for static assets + lightweight local APIs
   - Browser app (`public/index.html`, `public/app.js`, `public/styles.css`)
 - Persistence:
   - Browser `localStorage` only (`pianoTrainerV2`)
@@ -15,6 +15,7 @@
 - Navigation domain:
   - Circle of Fifths landing
   - Key lessons
+  - Admin arrangement workspace
   - Practice view
   - Dedicated history view
 - Curriculum domain:
@@ -41,11 +42,15 @@ Main in-memory + persisted state includes:
   - `chordStepIndex`, `inversionStepIndex`
   - song mode/control:
     - `songTrainerMode`
+    - `songArrangeAccess`
     - `songPlayalongFocus`
     - `songShowVideoInPlayMode`
     - `selectedSongSection`
     - `songTimingOverrides`
     - `songSectionOverrides`
+    - `songArrangementOverrides`
+    - `songSourceChoice`
+    - `songVideoChoice`
 - Timer/session:
   - `blockSecondsRemaining`
   - `timerRunning`, `timerSessionActive`
@@ -75,6 +80,8 @@ Main in-memory + persisted state includes:
   - song transforms:
     - apply timing override to measure starts/ends
     - apply per-section key/time-signature overrides
+    - apply arrangement override edits
+    - apply selected source/video variant
 
 4. Practice tracking:
 - Timer tick increments daily `seconds`.
@@ -104,8 +111,17 @@ Main in-memory + persisted state includes:
 
 ## 6) Known Constraints
 
-- No backend API or cloud sync.
+- No cloud backend or sync; APIs are local-only for tooling.
 - No auth/multi-user model.
 - History/progress data is browser-local.
 - Song arrangement data is hand-authored and still iterative.
 - YouTube alignment quality depends on manual bar-start calibration.
+
+## 7) Local API Surface
+
+- `POST /api/admin/auto-draft/run`
+  - Starts local autodraft pipeline.
+- `GET /api/admin/auto-draft/status`
+  - Returns run status, step progress, and logs.
+- `POST /api/song/analyze-bar`
+  - Returns beat-level chord events for a supplied bar time window.

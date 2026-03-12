@@ -1,6 +1,7 @@
 const screens = {
   circle: document.getElementById("screen-circle"),
   lessons: document.getElementById("screen-lessons"),
+  admin: document.getElementById("screen-admin"),
   practice: document.getElementById("screen-practice"),
   history: document.getElementById("screen-history"),
   complete: document.getElementById("screen-complete")
@@ -82,8 +83,16 @@ const state = {
   songPlayalongFocus: true,
   songShowVideoInPlayMode: false,
   selectedSongSection: "",
+  songArrangeAccess: false,
   songTimingOverrides: {},
   songSectionOverrides: {},
+  songArrangementOverrides: {},
+  songSourceChoice: {},
+  songVideoChoice: {},
+  adminSongKeyFilter: "all",
+  adminSelectedSongId: "",
+  songCalibrationStride: 1,
+  songArrangeSelectedBars: [],
   completedExerciseIds: []
 };
 
@@ -98,9 +107,16 @@ const songPlayback = {
   activeMeasureIndex: 0,
   activeChordEventIndex: 0,
   videoPlaying: false,
+  scrubberDragging: false,
   notationRafId: null,
   calibrationSongId: null,
   calibrationNextBarIndex: 0
+};
+
+const adminAutoDraft = {
+  pollIntervalId: null,
+  status: null,
+  lastAppliedEndedAt: ""
 };
 
 function build88KeyNoteRange() {
@@ -156,6 +172,19 @@ function loadState() {
     state.songSectionOverrides = parsed.songSectionOverrides && typeof parsed.songSectionOverrides === "object"
       ? parsed.songSectionOverrides
       : {};
+    state.songArrangementOverrides = parsed.songArrangementOverrides && typeof parsed.songArrangementOverrides === "object"
+      ? parsed.songArrangementOverrides
+      : {};
+    state.songSourceChoice = parsed.songSourceChoice && typeof parsed.songSourceChoice === "object"
+      ? parsed.songSourceChoice
+      : {};
+    state.songVideoChoice = parsed.songVideoChoice && typeof parsed.songVideoChoice === "object"
+      ? parsed.songVideoChoice
+      : {};
+    state.adminSongKeyFilter = typeof parsed.adminSongKeyFilter === "string" ? parsed.adminSongKeyFilter : "all";
+    state.adminSelectedSongId = typeof parsed.adminSelectedSongId === "string" ? parsed.adminSelectedSongId : "";
+    const parsedStride = Number(parsed.songCalibrationStride || 1);
+    state.songCalibrationStride = [1, 2, 4, 8].includes(parsedStride) ? parsedStride : 1;
 
     for (const keyName of CIRCLE_KEYS) {
       const src = parsed.keyProgress?.[keyName] || {};
@@ -184,13 +213,22 @@ function saveState() {
       practiceHistory: state.practiceHistory,
       selectedHistoryDateKey: state.selectedHistoryDateKey,
       songTimingOverrides: state.songTimingOverrides,
-      songSectionOverrides: state.songSectionOverrides
+      songSectionOverrides: state.songSectionOverrides,
+      songArrangementOverrides: state.songArrangementOverrides,
+      songSourceChoice: state.songSourceChoice,
+      songVideoChoice: state.songVideoChoice,
+      adminSongKeyFilter: state.adminSongKeyFilter,
+      adminSelectedSongId: state.adminSelectedSongId,
+      songCalibrationStride: state.songCalibrationStride
     })
   );
 }
 
 function showScreen(screenName) {
   state.screen = screenName;
+  if (screenName !== "practice" && screenName !== "admin") {
+    state.songArrangeAccess = false;
+  }
   Object.entries(screens).forEach(([name, el]) => {
     el.classList.toggle("active", name === screenName);
   });
@@ -200,6 +238,12 @@ function showScreen(screenName) {
     if (songPlayback.playerReady && songPlayback.player && typeof songPlayback.player.pauseVideo === "function") {
       songPlayback.player.pauseVideo();
     }
+  }
+  if (screenName === "admin") {
+    renderAdmin();
+    startAdminAutoDraftPolling();
+  } else {
+    stopAdminAutoDraftPolling();
   }
   renderNav();
 }
@@ -298,11 +342,12 @@ function renderNav() {
   const navMap = {
     circle: "navCircleBtn",
     lessons: "navLessonsBtn",
+    admin: "navAdminBtn",
     history: "navHistoryBtn",
     practice: "navLessonsBtn",
     complete: "navLessonsBtn"
   };
-  for (const id of ["navCircleBtn", "navLessonsBtn", "navHistoryBtn"]) {
+  for (const id of ["navCircleBtn", "navLessonsBtn", "navAdminBtn", "navHistoryBtn"]) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.classList.toggle("active", navMap[state.screen] === id);
@@ -432,6 +477,10 @@ function normalizeChordEventBeats(chordInputs, beatsPerBar = 4) {
 }
 
 function buildSongChordEvent(chordSymbol, roman, lyric, startSec, endSec, inversion = "root", beatStart = 1, beatLength = 4) {
+  const rawSymbol = compactChordSymbol(chordSymbol || "C");
+  const [baseSymbolRaw, bassSymbolRaw] = rawSymbol.split("/", 2);
+  const baseSymbol = baseSymbolRaw || "C";
+  const bassSymbol = bassSymbolRaw ? compactChordSymbol(bassSymbolRaw) : "";
   const chordDefs = {
     C: { rootMidi: 60, quality: "major" },
     G: { rootMidi: 67, quality: "major" },
@@ -439,11 +488,20 @@ function buildSongChordEvent(chordSymbol, roman, lyric, startSec, endSec, invers
     F: { rootMidi: 65, quality: "major" }
   };
 
-  const def = chordDefs[chordSymbol] || chordDefs.C;
+  const def = chordDefs[baseSymbol] || chordDefs.C;
   const rootTriadRh = buildTriad(def.rootMidi, def.quality);
   const rootTriadLh = rootTriadRh.map((m) => m - 12);
-  const triadRh = invertTriad(rootTriadRh, inversion);
-  const triadLh = invertTriad(rootTriadLh, inversion);
+  const rootPc = pitchClassFromMidi(rootTriadRh[0]);
+  const thirdPc = pitchClassFromMidi(rootTriadRh[1]);
+  const fifthPc = pitchClassFromMidi(rootTriadRh[2]);
+  let effectiveInversion = inversion;
+  if (bassSymbol) {
+    if (bassSymbol === thirdPc) effectiveInversion = "1st";
+    else if (bassSymbol === fifthPc) effectiveInversion = "2nd";
+    else effectiveInversion = "root";
+  }
+  const triadRh = invertTriad(rootTriadRh, effectiveInversion);
+  const triadLh = invertTriad(rootTriadLh, effectiveInversion);
   const staffTriadRh = (() => {
     const mapped = [...triadRh];
     const avg = mapped.reduce((sum, midi) => sum + midi, 0) / Math.max(1, mapped.length);
@@ -452,18 +510,19 @@ function buildSongChordEvent(chordSymbol, roman, lyric, startSec, endSec, invers
     return mapped;
   })();
   const bassPitch = pitchClassFromMidi(triadRh[0]);
-  const chordDisplay = inversion === "root" ? chordSymbol : `${chordSymbol}/${bassPitch}`;
-  const romanDisplay = `${roman}${inversionRomanSuffix(inversion)}`;
-  const rootPitchClass = pitchClassFromMidi(def.rootMidi);
-  const lhRootMidi = triadLh.find((m) => pitchClassFromMidi(m) === rootPitchClass) ?? triadLh[0];
-  const rhRootMidi = triadRh.find((m) => pitchClassFromMidi(m) === rootPitchClass) ?? triadRh[0];
+  const chordDisplay = bassSymbol
+    ? `${baseSymbol}/${bassSymbol}`
+    : (effectiveInversion === "root" ? baseSymbol : `${baseSymbol}/${bassPitch}`);
+  const romanDisplay = `${roman}${inversionRomanSuffix(effectiveInversion)}`;
+  const lhRootMidi = triadLh.find((m) => pitchClassFromMidi(m) === rootPc) ?? triadLh[0];
+  const rhRootMidi = triadRh.find((m) => pitchClassFromMidi(m) === rootPc) ?? triadRh[0];
   return {
-    chordSymbol,
+    chordSymbol: chordDisplay,
     chordDisplay,
     roman,
     romanDisplay,
-    inversion,
-    inversionLabel: inversionLabel(inversion),
+    inversion: effectiveInversion,
+    inversionLabel: inversionLabel(effectiveInversion),
     lyric,
     beatStart,
     beatLength,
@@ -559,8 +618,194 @@ function buildSongMeasure(barSpec, startSec, endSec, timeSignature = "4/4") {
   return hydrateSongMeasureTiming(measure, timeSignature);
 }
 
+function librarySongSpecForKey(keyName, songId) {
+  const root = window.PIANO_TRAINER_SONG_LIBRARY;
+  if (!root || typeof root !== "object") return null;
+  const rows = Array.isArray(root[keyName]) ? root[keyName] : [];
+  if (!songId) return rows;
+  return rows.find((row) => row && row.id === songId) || null;
+}
+
+function selectedSongSourceChoice(songId) {
+  if (!songId) return "default";
+  return String(state.songSourceChoice?.[songId] || "default");
+}
+
+function romanForChordInC(chordSymbol) {
+  const value = String(chordSymbol || "").trim();
+  const root = value.split("/")[0];
+  const isMinor = /m(?!aj)/i.test(root);
+  const map = {
+    C: "I",
+    "C#": "#I",
+    Db: "bII",
+    D: "II",
+    "D#": "#II",
+    Eb: "bIII",
+    E: "III",
+    F: "IV",
+    "F#": "#IV",
+    Gb: "bV",
+    G: "V",
+    "G#": "#V",
+    Ab: "bVI",
+    A: "VI",
+    "A#": "#VI",
+    Bb: "bVII",
+    B: "VII"
+  };
+  const rootPitch = root.match(/^([A-G](?:#|b)?)/)?.[1] || "C";
+  const roman = map[rootPitch] || "I";
+  return isMinor ? roman.toLowerCase() : roman;
+}
+
+function overlaySongWithDraftChords(songData, draftId) {
+  const draftRoot = window.PIANO_TRAINER_SONG_DRAFTS;
+  const draft = draftRoot && typeof draftRoot === "object" ? draftRoot[draftId] : null;
+  if (!draft || !Array.isArray(songData?.measures)) return songData;
+  const cloned = cloneSongData(songData);
+  const draftBars = Array.isArray(draft.bars) ? draft.bars : [];
+  const chordArray = Array.isArray(draft.chords) ? draft.chords : [];
+
+  const leadingIntroBars = (() => {
+    let count = 0;
+    for (const measure of cloned.measures) {
+      const section = String(measure?.section || "").toLowerCase();
+      const formTag = String(measure?.formTag || "").toLowerCase();
+      if (section.includes("intro") || formTag === "intro") {
+        count += 1;
+        continue;
+      }
+      break;
+    }
+    return count;
+  })();
+  const draftStartsWithLyrics = draftBars.slice(0, Math.max(1, leadingIntroBars)).some((bar) => {
+    if (String(bar?.lyric || "").trim()) return true;
+    if (!Array.isArray(bar?.events)) return false;
+    return bar.events.some((ev) => String(ev?.lyric || "").trim());
+  });
+  const applyOffset = leadingIntroBars > 0 && draftStartsWithLyrics ? leadingIntroBars : 0;
+
+  for (let i = 0; i < cloned.measures.length; i += 1) {
+    const draftIndex = i - applyOffset;
+    if (draftIndex < 0) continue;
+    const draftBar = draftBars[draftIndex] || null;
+    const chord = String(draftBar?.chord || chordArray[draftIndex] || "").trim();
+    if (!chord && !Array.isArray(draftBar?.events)) continue;
+    const measure = cloned.measures[i];
+    const oldEvent = chordEventForMeasure(measure, 0) || measure;
+    const incomingEvents = Array.isArray(draftBar?.events) && draftBar.events.length
+      ? draftBar.events
+      : [{
+        chord: chord || oldEvent?.chordSymbol || "C",
+        beatStart: 1,
+        beatLength: beatsPerBarFromTimeSignature(measure.sectionTimeSignature || cloned.timeSignature || "4/4"),
+        lyric: draftBar?.lyric || ""
+      }];
+    measure.chordEvents = incomingEvents.map((ev) => {
+      const evChord = String(ev.chord || chord || oldEvent?.chordSymbol || "C");
+      return {
+        chord: evChord,
+        roman: romanForChordInC(evChord),
+        inversion: evChord.includes("/") ? "inversion" : "root",
+        lyric: String(ev.lyric || ""),
+        beatStart: Number(ev.beatStart || 1),
+        beatLength: Number(ev.beatLength || 1)
+      };
+    });
+    measure.lyric = String(
+      measure.chordEvents.find((ev) => String(ev.lyric || "").trim())?.lyric
+      || draftBar?.lyric
+      || measure.lyric
+      || ""
+    );
+    hydrateSongMeasureTiming(measure, measure.sectionTimeSignature || cloned.timeSignature || "4/4");
+  }
+  const variant = Array.isArray(cloned.sourceVariants) ? cloned.sourceVariants.find((row) => row.id === draftId) : null;
+  cloned.arrangementSource = {
+    id: draftId,
+    label: variant?.label || draft.label || draftId,
+    type: "auto-draft",
+    verified: false
+  };
+  return cloned;
+}
+
+function buildSongDataFromSpec(spec) {
+  if (!spec || typeof spec !== "object" || !Array.isArray(spec.sectionSpecs)) return null;
+  const chartStartSec = Number(spec.chartStartSec || 0);
+  const secondsPerBar = Number(spec.secondsPerBar || 3.4);
+  const songId = String(spec.id || "song");
+  const chosenVideoId = String(state.songVideoChoice?.[songId] || spec.youtubeId || "");
+  const measures = [];
+  const formSections = [];
+
+  for (const section of spec.sectionSpecs) {
+    const sectionName = section?.name || "Section";
+    const formTag = section?.formTag || "";
+    const timeSignature = section?.timeSignature || spec.timeSignature || "4/4";
+    const keySignature = section?.keySignature || spec.songKey || "n/a";
+    const bars = Array.isArray(section?.bars) ? section.bars : [];
+    const sectionStartSec = chartStartSec + measures.length * secondsPerBar;
+    for (const bar of bars) {
+      const index = measures.length;
+      const startSec = Number((chartStartSec + index * secondsPerBar).toFixed(2));
+      const endSec = Number((chartStartSec + (index + 1) * secondsPerBar).toFixed(2));
+      const measure = buildSongMeasure(bar, startSec, endSec, timeSignature);
+      measure.section = sectionName;
+      measure.formTag = formTag;
+      measure.sectionTimeSignature = timeSignature;
+      measure.sectionKeySignature = keySignature;
+      measure.sourceId = spec.arrangementSource?.id || "";
+      hydrateSongMeasureTiming(measure, timeSignature);
+      measures.push(measure);
+    }
+    const sectionEndSec = Number((chartStartSec + measures.length * secondsPerBar).toFixed(2));
+    formSections.push({
+      name: sectionName,
+      formTag,
+      sectionTimeSignature: timeSignature,
+      sectionKeySignature: keySignature,
+      sourceId: spec.arrangementSource?.id || "",
+      startSec: Number(sectionStartSec.toFixed(2)),
+      endSec: sectionEndSec
+    });
+  }
+
+  return {
+    id: songId,
+    title: spec.title || "Song",
+    artist: spec.artist || "Unknown artist",
+    credits: Array.isArray(spec.credits) ? spec.credits : [],
+    songKey: spec.songKey || "n/a",
+    timeSignature: spec.timeSignature || "4/4",
+    romanProgression: spec.romanProgression || "n/a",
+    youtubeId: chosenVideoId,
+    youtubeCandidates: Array.isArray(spec.youtubeCandidates) ? spec.youtubeCandidates.map((row) => ({ ...row })) : [],
+    chartStartSec,
+    hint: spec.hint || "",
+    arrangementSource: spec.arrangementSource || null,
+    sourceVariants: Array.isArray(spec.sourceVariants) ? spec.sourceVariants : [{ id: "default", label: spec.arrangementSource?.label || "Default" }],
+    formSections,
+    measures
+  };
+}
+
 function buildLetItBeSongData() {
-  const chartStartSec = 12.0;
+  const sourceSpec = librarySongSpecForKey("C", "let-it-be");
+  const fromSpec = buildSongDataFromSpec(sourceSpec);
+  if (fromSpec) {
+    const chosenRaw = selectedSongSourceChoice("let-it-be");
+    const validIds = new Set((fromSpec.sourceVariants || []).map((row) => String(row.id || "default")));
+    const chosen = validIds.has(chosenRaw) ? chosenRaw : "default";
+    if (chosen && chosen !== "default") {
+      return overlaySongWithDraftChords(fromSpec, chosen);
+    }
+    return fromSpec;
+  }
+
+  const chartStartSec = 0.0;
   const secondsPerBar = 3.4;
   const measures = [];
   const formSections = [];
@@ -604,14 +849,20 @@ function buildLetItBeSongData() {
   ], "4/4", "C Major");
 
   pushSection("Verse 1", "A", [
-    { chord: "C", roman: "I", inversion: "root", lyric: "When I find myself" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "in times of trouble" },
+    {
+      lyric: "When I find myself in times of trouble",
+      chords: [
+        { chord: "C", roman: "I", inversion: "root", beatStart: 1, beatLength: 2, lyric: "When I find myself" },
+        { chord: "G", roman: "V", inversion: "1st", beatStart: 3, beatLength: 2, lyric: "in times of trouble" }
+      ]
+    },
     { chord: "Am", roman: "vi", inversion: "1st", lyric: "Mother Mary comes to me" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "speaking words of wisdom" },
     { chord: "C", roman: "I", inversion: "root", lyric: "let it be" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "And in my hour of darkness" },
     { chord: "Am", roman: "vi", inversion: "1st", lyric: "she is standing right in front of me" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "speaking words of wisdom, let it be" }
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "speaking words of wisdom" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "let it be" }
   ], "4/4", "C Major");
 
   pushSection("Chorus 1", "B", [
@@ -641,9 +892,9 @@ function buildLetItBeSongData() {
     { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
     { chord: "C", roman: "I", inversion: "root", lyric: "let it be" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "Yeah there will be an answer" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "There will be an answer" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
-    { chord: "F", roman: "IV", inversion: "1st", lyric: "whisper words of wisdom" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "there will be an answer" },
     { chord: "C", roman: "I", inversion: "root", lyric: "let it be" }
   ], "4/4", "C Major");
 
@@ -674,17 +925,23 @@ function buildLetItBeSongData() {
     { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
     { chord: "C", roman: "I", inversion: "root", lyric: "let it be" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "Whisper words" },
-    { chord: "G", roman: "V", inversion: "1st", lyric: "of wisdom" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "There will be an answer" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
+    { chord: "Am", roman: "vi", inversion: "1st", lyric: "Let it be" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "there will be an answer, let it be" }
+    { chord: "C", roman: "I", inversion: "root", lyric: "let it be" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "Whisper words of wisdom" },
+    { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
+    { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
+    { chord: "C", roman: "I", inversion: "root", lyric: "let it be, be" }
   ], "4/4", "C Major");
 
   pushSection("Outro", "Outro", [
     { chord: "C", roman: "I", inversion: "root", lyric: "Whisper words of wisdom" },
     { chord: "G", roman: "V", inversion: "1st", lyric: "let it be" },
     { chord: "F", roman: "IV", inversion: "1st", lyric: "let it be" },
-    { chord: "C", roman: "I", inversion: "root", lyric: "" }
+    { chord: "C", roman: "I", inversion: "root", lyric: "let it be" }
   ], "4/4", "C Major");
 
   return {
@@ -698,65 +955,19 @@ function buildLetItBeSongData() {
     youtubeId: "QDYfEBY9NM4",
     chartStartSec,
     hint: "Hold each bar steady and change chords right on the beat.",
+    arrangementSource: {
+      id: "let-it-be-inline-fallback",
+      label: "Inline Fallback Arrangement",
+      type: "fallback",
+      verified: false
+    },
     formSections,
     measures
   };
 }
 
 function songRowsForKey(keyName) {
-  if (keyName === "C") {
-    return [
-      buildLetItBeSongData(),
-      {
-        id: "no-woman-no-cry",
-        title: "No Woman, No Cry",
-        artist: "Bob Marley",
-        songKey: "C Major",
-        timeSignature: "4/4",
-        romanProgression: "I - V - vi - IV",
-        hint: "Placeholder song lesson."
-      },
-      {
-        id: "imagine",
-        title: "Imagine",
-        artist: "John Lennon",
-        songKey: "C Major",
-        timeSignature: "4/4",
-        romanProgression: "Simplified C-major sections",
-        hint: "Placeholder song lesson."
-      }
-    ];
-  }
-
-  return [
-    {
-      id: `${keyName.toLowerCase()}-pop-1`,
-      title: `${keyName} Pop Progression 1`,
-      artist: "Practice Drill",
-      songKey: `${keyName} Major`,
-      timeSignature: "4/4",
-      romanProgression: "I - V - vi - IV",
-      hint: `${keyName} major groove`
-    },
-    {
-      id: `${keyName.toLowerCase()}-pop-2`,
-      title: `${keyName} Pop Progression 2`,
-      artist: "Practice Drill",
-      songKey: `${keyName} Major`,
-      timeSignature: "4/4",
-      romanProgression: "I - IV - V - I",
-      hint: `${keyName} verse/chorus loop`
-    },
-    {
-      id: `${keyName.toLowerCase()}-rock-ballad`,
-      title: `${keyName} Rock Ballad Sketch`,
-      artist: "Practice Drill",
-      songKey: `${keyName} Major`,
-      timeSignature: "4/4",
-      romanProgression: "I - vi - IV - V",
-      hint: `${keyName} chord-flow practice`
-    }
-  ];
+  return [buildLetItBeSongData()];
 }
 
 function cloneSongData(songData) {
@@ -864,6 +1075,85 @@ function applySectionOverrideToSongData(songData, override) {
     hydrateSongMeasureTiming(measure, measure.sectionTimeSignature || cloned.timeSignature || "4/4");
   }
   cloned.formSections = recomputeSongSectionsFromMeasures(cloned);
+  return cloned;
+}
+
+function sanitizeMeasureForOverride(measure) {
+  return {
+    section: measure.section || "Section",
+    formTag: measure.formTag || "",
+    sectionTimeSignature: measure.sectionTimeSignature || "4/4",
+    sectionKeySignature: measure.sectionKeySignature || "n/a",
+    lyric: measure.lyric || "",
+    startSec: Number(measure.startSec || 0),
+    endSec: Number(measure.endSec || measure.startSec || 0),
+    chordEvents: (Array.isArray(measure.chordEvents) && measure.chordEvents.length
+      ? measure.chordEvents
+      : [{
+        chord: measure.chordSymbol || "C",
+        roman: measure.roman || "I",
+        inversion: measure.inversion || "root",
+        lyric: measure.lyric || "",
+        beatStart: 1,
+        beatLength: beatsPerBarFromTimeSignature(measure.sectionTimeSignature || "4/4")
+      }]).map((event) => ({
+      chord: event.chordSymbol || event.chord || "C",
+      roman: event.roman || "I",
+      inversion: event.inversion || "root",
+      lyric: event.lyric || "",
+      beatStart: Number(event.beatStart || 1),
+      beatLength: Number(event.beatLength || 1)
+    }))
+  };
+}
+
+function recalculateMeasureTimes(measures) {
+  if (!Array.isArray(measures) || !measures.length) return measures;
+  const normalized = measures.map((measure) => ({ ...sanitizeMeasureForOverride(measure) }));
+  let cursor = Number(normalized[0].startSec || 0);
+  for (let i = 0; i < normalized.length; i += 1) {
+    const row = normalized[i];
+    const previousDuration = Math.max(0.2, Number(row.endSec || 0) - Number(row.startSec || 0) || 3.4);
+    row.startSec = Number(cursor.toFixed(2));
+    row.endSec = Number((cursor + previousDuration).toFixed(2));
+    hydrateSongMeasureTiming(row, row.sectionTimeSignature || "4/4");
+    cursor = row.endSec;
+  }
+  return normalized;
+}
+
+function remapAnchorsByTime(oldAnchors, measures) {
+  if (!oldAnchors || typeof oldAnchors !== "object" || !Array.isArray(measures) || !measures.length) return {};
+  const rows = Object.entries(oldAnchors)
+    .map(([key, value]) => ({ idx: Number.parseInt(key, 10), timeSec: Number(value) }))
+    .filter((row) => Number.isInteger(row.idx) && Number.isFinite(row.timeSec))
+    .sort((a, b) => a.timeSec - b.timeSec);
+  const next = {};
+  for (const row of rows) {
+    let bestIndex = 0;
+    let bestDelta = Infinity;
+    for (let i = 0; i < measures.length; i += 1) {
+      const delta = Math.abs(Number(measures[i].startSec || 0) - row.timeSec);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestIndex = i;
+      }
+    }
+    next[String(bestIndex)] = Number(row.timeSec);
+  }
+  return next;
+}
+
+function applyArrangementOverrideToSongData(songData, override) {
+  const cloned = cloneSongData(songData);
+  if (!Array.isArray(override?.measures) || !override.measures.length) return cloned;
+  const measures = override.measures.map((measure) => ({
+    ...sanitizeMeasureForOverride(measure)
+  }));
+  const timed = recalculateMeasureTimes(measures);
+  cloned.measures = timed;
+  cloned.formSections = recomputeSongSectionsFromMeasures(cloned);
+  if (Number.isFinite(cloned.measures[0]?.startSec)) cloned.chartStartSec = Number(cloned.measures[0].startSec);
   return cloned;
 }
 
@@ -1013,7 +1303,13 @@ function buildCurriculumForKey(keyName) {
 
   const songs = songRows.map((song, index) => {
     const exerciseId = `${keyName}-song-${song.id || index + 1}`;
-    const timedSong = applyTimingOverrideToSongData(song, state.songTimingOverrides?.[exerciseId]);
+    const arrangedSong = applyArrangementOverrideToSongData(song, state.songArrangementOverrides?.[exerciseId]);
+    const sourceId = String(arrangedSong?.arrangementSource?.id || "default");
+    const scopedTimingKey = `${exerciseId}::${sourceId}`;
+    const timingOverride = state.songTimingOverrides?.[scopedTimingKey]
+      || (sourceId === "default" ? state.songTimingOverrides?.[exerciseId] : null)
+      || null;
+    const timedSong = applyTimingOverrideToSongData(arrangedSong, timingOverride);
     const configuredSong = applySectionOverrideToSongData(timedSong, state.songSectionOverrides?.[exerciseId]);
     return {
       id: exerciseId,
@@ -1329,6 +1625,207 @@ function renderLessons() {
   renderSessionTimerControls();
 }
 
+function allAdminSongSpecs() {
+  const root = window.PIANO_TRAINER_SONG_LIBRARY;
+  if (!root || typeof root !== "object") return [];
+  const rows = [];
+  for (const [keyName, songs] of Object.entries(root)) {
+    if (!Array.isArray(songs)) continue;
+    for (const song of songs) {
+      if (!song || typeof song !== "object") continue;
+      rows.push({ keyName, song });
+    }
+  }
+  return rows;
+}
+
+function renderAdmin() {
+  const keySelect = document.getElementById("adminSongKeyFilter");
+  const listEl = document.getElementById("adminSongList");
+  const detailEl = document.getElementById("adminSongDetail");
+  if (!(keySelect instanceof HTMLSelectElement) || !listEl || !detailEl) return;
+
+  const allSongs = allAdminSongSpecs();
+  const keys = Array.from(new Set(allSongs.map((row) => row.keyName))).sort();
+  if (!["all", ...keys].includes(state.adminSongKeyFilter)) state.adminSongKeyFilter = "all";
+  keySelect.innerHTML = [
+    `<option value="all" ${state.adminSongKeyFilter === "all" ? "selected" : ""}>All Keys</option>`,
+    ...keys.map((keyName) => `<option value="${keyName}" ${state.adminSongKeyFilter === keyName ? "selected" : ""}>${keyName}</option>`)
+  ].join("");
+
+  const filtered = state.adminSongKeyFilter === "all"
+    ? allSongs
+    : allSongs.filter((row) => row.keyName === state.adminSongKeyFilter);
+  if (!filtered.length) {
+    listEl.innerHTML = "<p class='muted'>No songs available for this filter.</p>";
+    detailEl.innerHTML = "<p class='muted'>Select a song to configure arrangement workflow.</p>";
+    return;
+  }
+  if (!filtered.some((row) => row.song.id === state.adminSelectedSongId)) {
+    state.adminSelectedSongId = filtered[0].song.id;
+  }
+
+  listEl.innerHTML = filtered.map(({ keyName, song }) => `
+    <article class="lesson-item">
+      <div>
+        <h4>${song.title}</h4>
+        <p>${song.artist || "Unknown artist"} · ${song.songKey || keyName}</p>
+      </div>
+      <div class="row gap">
+        <span class="badge ${song.id === state.adminSelectedSongId ? "success" : ""}">${song.id === state.adminSelectedSongId ? "Selected" : "Open"}</span>
+        <button class="btn outlined" data-action="admin-select-song" data-song-id="${song.id}">Select</button>
+      </div>
+    </article>
+  `).join("");
+
+  const picked = filtered.find((row) => row.song.id === state.adminSelectedSongId) || filtered[0];
+  const selectedSong = picked.song;
+  const selectedVideo = String(state.songVideoChoice[selectedSong.id] || selectedSong.youtubeId || "");
+  const videos = Array.isArray(selectedSong.youtubeCandidates) ? [...selectedSong.youtubeCandidates] : [];
+  videos.sort((a, b) => Number(b.viewCount || 0) - Number(a.viewCount || 0));
+
+  detailEl.innerHTML = `
+    <h3 class="admin-song-title">${selectedSong.title} · ${selectedSong.artist || "Unknown artist"}</h3>
+    <p class="song-meta-line">Key: ${selectedSong.songKey || picked.keyName} · Time Signature: ${selectedSong.timeSignature || "n/a"}</p>
+    <p class="song-meta-line">Source: ${selectedSong.arrangementSource?.label || "n/a"}</p>
+    <div class="song-arrangement-controls">
+      <button id="adminRunAutoDraftNowBtn" class="btn filled">Run Auto-draft Now</button>
+      <button id="adminAutoArrangeBtn" class="btn tonal">Auto-arrange</button>
+      <button id="adminOpenArrangementBtn" class="btn outlined">Open Arrangement Page</button>
+    </div>
+    <div id="adminAutoDraftStatusPanel" class="admin-autodraft-panel"></div>
+    <div>
+      <p class="label">YouTube Candidates (ranked by views)</p>
+      <div class="admin-video-list">
+        ${videos.map((row) => `
+          <article class="admin-video-item ${selectedVideo === row.videoId ? "active" : ""}">
+            <strong>${row.title}</strong>
+            <p class="admin-video-meta">${row.channel || "Unknown channel"} · ${(Number(row.viewCount || 0)).toLocaleString()} views</p>
+            <div class="row gap">
+              <button class="btn outlined" data-action="admin-choose-video" data-video-id="${row.videoId}" data-song-id="${selectedSong.id}">Use This Video</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
+  renderAdminAutoDraftStatus();
+}
+
+function adminAutoDraftFallbackStatus() {
+  return {
+    running: false,
+    status: "idle",
+    currentStepId: "",
+    error: "",
+    logs: [],
+    steps: [
+      { id: "prepare_audio", label: "Prepare audio input", status: "pending" },
+      { id: "build_harmony", label: "Build harmony-focused stem", status: "pending" },
+      { id: "analyze", label: "Analyze beats/chords/lyrics", status: "pending" },
+      { id: "publish", label: "Publish draft to app", status: "pending" },
+      { id: "complete", label: "Finalize", status: "pending" }
+    ]
+  };
+}
+
+function adminAutoDraftBadgeText(status) {
+  if (!status || status.status === "idle") return "Idle";
+  if (status.running) return "Running";
+  if (status.status === "success") return "Completed";
+  if (status.status === "error") return "Failed";
+  return "Idle";
+}
+
+function renderAdminAutoDraftStatus() {
+  const panel = document.getElementById("adminAutoDraftStatusPanel");
+  if (!panel) return;
+  const status = adminAutoDraft.status || adminAutoDraftFallbackStatus();
+  const steps = Array.isArray(status.steps) && status.steps.length ? status.steps : adminAutoDraftFallbackStatus().steps;
+  const badgeText = adminAutoDraftBadgeText(status);
+  const logs = Array.isArray(status.logs) ? status.logs.slice(-6) : [];
+  const currentStep = steps.find((step) => step.status === "in_progress");
+  const errorText = status.status === "error" && status.error ? String(status.error) : "";
+  panel.innerHTML = `
+    <div class="admin-autodraft-header">
+      <span class="badge ${status.status === "error" ? "" : "success"}">${badgeText}</span>
+      <span class="admin-autodraft-current">${currentStep ? `Current: ${currentStep.label}` : "Current: none"}</span>
+    </div>
+    <div class="admin-autodraft-steps">
+      ${steps.map((step) => `
+        <p class="admin-autodraft-step ${step.status}">${step.status === "completed" ? "✓" : step.status === "in_progress" ? "…" : step.status === "error" ? "!" : "○"} ${step.label}</p>
+      `).join("")}
+    </div>
+    ${errorText ? `<p class="admin-autodraft-error">${errorText}</p>` : ""}
+    <pre class="admin-autodraft-log">${logs.length ? logs.join("\n") : "No logs yet."}</pre>
+  `;
+}
+
+async function fetchAdminAutoDraftStatus() {
+  const response = await fetch("/api/admin/auto-draft/status");
+  if (!response.ok) throw new Error(`Status fetch failed (${response.status})`);
+  const data = await response.json();
+  adminAutoDraft.status = data;
+  if (data?.status === "success"
+    && typeof data.endedAt === "string"
+    && data.endedAt
+    && adminAutoDraft.lastAppliedEndedAt !== data.endedAt) {
+    await reloadSongDraftsFromServer();
+    adminAutoDraft.lastAppliedEndedAt = data.endedAt;
+    showToast("Auto-draft published. Ready to use.");
+  }
+  if (state.screen === "admin") {
+    renderAdminAutoDraftStatus();
+  }
+  if (!data?.running) {
+    stopAdminAutoDraftPolling();
+  }
+  return data;
+}
+
+async function reloadSongDraftsFromServer() {
+  const response = await fetch(`/song-drafts.js?ts=${Date.now()}`);
+  if (!response.ok) throw new Error(`Draft refresh failed (${response.status})`);
+  const script = await response.text();
+  const run = new Function(script);
+  run();
+}
+
+function stopAdminAutoDraftPolling() {
+  if (adminAutoDraft.pollIntervalId) {
+    clearInterval(adminAutoDraft.pollIntervalId);
+    adminAutoDraft.pollIntervalId = null;
+  }
+}
+
+function startAdminAutoDraftPolling() {
+  if (adminAutoDraft.pollIntervalId) return;
+  fetchAdminAutoDraftStatus().catch(() => {});
+  adminAutoDraft.pollIntervalId = setInterval(() => {
+    fetchAdminAutoDraftStatus().catch(() => {});
+  }, 1200);
+}
+
+function openAdminArrangement(songId, keyName) {
+  const key = keyName || "C";
+  state.adminSelectedSongId = songId || state.adminSelectedSongId;
+  state.selectedKey = key;
+  const curriculum = buildCurriculumForKey(key);
+  const index = curriculum.songs.findIndex((row) => row.songData?.id === songId);
+  state.block = "song";
+  state.songIndex = index >= 0 ? index : 0;
+  state.songTrainerMode = "arrange";
+  state.songArrangeAccess = true;
+  state.songPlayalongFocus = false;
+  state.songShowVideoInPlayMode = true;
+  state.songArrangeSelectedBars = [];
+  songPlayback.activeMeasureIndex = 0;
+  songPlayback.activeChordEventIndex = 0;
+  saveState();
+  showScreen("practice");
+  renderPractice();
+}
+
 function historyMonthDate() {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth() + state.historyMonthOffset, 1);
@@ -1415,6 +1912,17 @@ function compactChordSymbol(value) {
     .replace(/♭/g, "b")
     .replace(/♯/g, "#")
     .trim();
+}
+
+function showToast(message, durationMs = 1800) {
+  const el = document.getElementById("appToast");
+  if (!el || !message) return;
+  el.textContent = String(message);
+  el.classList.remove("hidden");
+  if (showToast.timeoutId) clearTimeout(showToast.timeoutId);
+  showToast.timeoutId = setTimeout(() => {
+    el.classList.add("hidden");
+  }, Math.max(700, Number(durationMs) || 1800));
 }
 
 function chordEventBeatLabel(event) {
@@ -1689,12 +2197,13 @@ function buildSongMeasureExercise(exercise, measureIndex, chordEventIndex = 0) {
 
 function getMeasureIndexForTime(measures, timeSec) {
   if (!Array.isArray(measures) || !measures.length || !Number.isFinite(timeSec)) return 0;
-  if (timeSec < Number(measures[0].startSec || 0)) return -1;
+  const edgeEpsilon = 0.03;
+  if (timeSec < Number(measures[0].startSec || 0) - edgeEpsilon) return -1;
   for (let i = 0; i < measures.length; i += 1) {
     const row = measures[i];
-    if (timeSec >= Number(row.startSec || 0) && timeSec < Number(row.endSec || 0)) return i;
+    if (timeSec >= Number(row.startSec || 0) - edgeEpsilon && timeSec < Number(row.endSec || 0) - edgeEpsilon) return i;
   }
-  return timeSec >= Number(measures[measures.length - 1].endSec || 0) ? measures.length - 1 : 0;
+  return timeSec >= Number(measures[measures.length - 1].endSec || 0) - edgeEpsilon ? measures.length - 1 : 0;
 }
 
 function getChordEventIndexForTime(measure, timeSec) {
@@ -1730,6 +2239,68 @@ function getYouTubeTimeSec() {
   }
 }
 
+function getYouTubeDurationSec() {
+  if (!songPlayback.playerReady || !songPlayback.player || typeof songPlayback.player.getDuration !== "function") return null;
+  try {
+    const duration = Number(songPlayback.player.getDuration());
+    return Number.isFinite(duration) && duration > 0 ? duration : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatSongTimeClock(totalSec) {
+  const bounded = Math.max(0, Math.floor(Number(totalSec) || 0));
+  const mins = Math.floor(bounded / 60);
+  const sec = bounded % 60;
+  return `${String(mins).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function songDurationSecForExercise(exercise) {
+  const ytDuration = getYouTubeDurationSec();
+  if (Number.isFinite(ytDuration)) return Math.max(1, ytDuration);
+  if (!songHasStructuredChart(exercise)) return 1;
+  const measures = exercise.songData?.measures || [];
+  const firstStart = Number(exercise.songData?.chartStartSec || measures[0]?.startSec || 0);
+  const last = measures[measures.length - 1];
+  const end = Number(last?.endSec || last?.startSec || firstStart + 1);
+  return Math.max(1, end + Math.max(0, firstStart * 0.2));
+}
+
+function renderSongArrangeScrubber(exercise) {
+  const scrubber = document.getElementById("songArrangeScrubber");
+  const markers = document.getElementById("songArrangeAnchorMarkers");
+  const meta = document.getElementById("songArrangeScrubberMeta");
+  if (!scrubber || !markers || !meta || !songHasStructuredChart(exercise)) return;
+  const duration = songDurationSecForExercise(exercise);
+  const current = getYouTubeTimeSec();
+  const clampedCurrent = Number.isFinite(current)
+    ? Math.max(0, Math.min(duration, Number(current)))
+    : 0;
+
+  scrubber.min = "0";
+  scrubber.max = duration.toFixed(2);
+  scrubber.step = "0.1";
+  scrubber.disabled = !Boolean(songPlayback.playerReady && songPlayback.player && typeof songPlayback.player.seekTo === "function");
+  if (!songPlayback.scrubberDragging) {
+    scrubber.value = clampedCurrent.toFixed(2);
+  }
+
+  const override = songTimingOverrideForExercise(exercise);
+  const anchorRows = override?.anchors && typeof override.anchors === "object"
+    ? Object.entries(override.anchors)
+      .map(([key, value]) => ({ barIndex: Number.parseInt(key, 10), timeSec: Number(value) }))
+      .filter((row) => Number.isInteger(row.barIndex) && row.barIndex >= 0 && Number.isFinite(row.timeSec))
+      .sort((a, b) => a.timeSec - b.timeSec)
+    : [];
+  markers.innerHTML = anchorRows.map((row) => {
+    const pct = Math.max(0, Math.min(100, (row.timeSec / duration) * 100));
+    return `<span class="song-mini-anchor-flag" style="left:${pct.toFixed(2)}%" title="Bar ${row.barIndex + 1}"></span>`;
+  }).join("");
+
+  meta.textContent = `${formatSongTimeClock(clampedCurrent)} / ${formatSongTimeClock(duration)}`;
+}
+
 function updateSongChartHighlight(exercise, measureIndex, chordEventIndex = -1, timeSec = null) {
   const chart = document.getElementById("songChart");
   if (chart) {
@@ -1737,6 +2308,14 @@ function updateSongChartHighlight(exercise, measureIndex, chordEventIndex = -1, 
       const idx = Number.parseInt(el.dataset.songMeasure || "-1", 10);
       el.classList.toggle("active", idx === measureIndex);
       const measure = exercise?.songData?.measures?.[idx];
+      const isDownbeatWindow = idx === measureIndex
+        && state.songTrainerMode === "arrange"
+        && Number.isFinite(timeSec)
+        && measure
+        && Number.isFinite(Number(measure.startSec))
+        && (timeSec - Number(measure.startSec)) >= 0
+        && (timeSec - Number(measure.startSec)) <= 0.22;
+      el.classList.toggle("downbeat", Boolean(isDownbeatWindow));
       const showEventIndex = idx === measureIndex ? chordEventIndex : -1;
       updateMeasureCardDisplay(el, measure, showEventIndex);
     });
@@ -1783,6 +2362,7 @@ function syncSongFollowAlong(exercise, force = false) {
     if (force) {
       updateSongChartHighlight(exercise, -1, -1, getYouTubeTimeSec());
     }
+    renderSongArrangeScrubber(exercise);
     return;
   }
   const measures = exercise.songData.measures;
@@ -1815,6 +2395,7 @@ function syncSongFollowAlong(exercise, force = false) {
     }
     updateSongChartHighlight(exercise, next.measureIndex, next.chordEventIndex, timeSec);
   }
+  renderSongArrangeScrubber(exercise);
 }
 
 function stopSongFollowAlongPoll() {
@@ -1916,7 +2497,21 @@ function ensureSongPlayer(songData) {
 
 function songTimingOverrideForExercise(exercise) {
   if (!exercise?.id) return null;
-  return state.songTimingOverrides?.[exercise.id] || null;
+  const sourceId = String(exercise.songData?.arrangementSource?.id || "default");
+  const scopedKey = `${exercise.id}::${sourceId}`;
+  if (state.songTimingOverrides?.[scopedKey]) return state.songTimingOverrides[scopedKey];
+  if (sourceId === "default") return state.songTimingOverrides?.[exercise.id] || null;
+  return null;
+}
+
+function timingOverrideStateKey(exercise) {
+  if (!exercise?.id) return "";
+  const sourceId = String(exercise.songData?.arrangementSource?.id || "default");
+  return `${exercise.id}::${sourceId}`;
+}
+
+function timingCalibrationContextId(exercise) {
+  return timingOverrideStateKey(exercise);
 }
 
 function songSectionOverrideForExercise(exercise) {
@@ -1924,12 +2519,26 @@ function songSectionOverrideForExercise(exercise) {
   return state.songSectionOverrides?.[exercise.id] || null;
 }
 
+function songArrangementOverrideForExercise(exercise) {
+  if (!exercise?.id) return null;
+  return state.songArrangementOverrides?.[exercise.id] || null;
+}
+
 function saveSongTimingOverride(exercise, override) {
   if (!exercise?.id) return;
-  state.songTimingOverrides[exercise.id] = {
+  const key = timingOverrideStateKey(exercise);
+  state.songTimingOverrides[key] = {
     barStarts: Array.isArray(override?.barStarts)
       ? override.barStarts.map((value) => (Number.isFinite(value) ? Number(value) : null))
-      : []
+      : [],
+    anchors: override?.anchors && typeof override.anchors === "object"
+      ? Object.fromEntries(
+        Object.entries(override.anchors)
+          .map(([k, v]) => [String(k), Number(v)])
+          .filter(([, v]) => Number.isFinite(v))
+      )
+      : {},
+    stride: [1, 2, 4, 8].includes(Number(override?.stride)) ? Number(override.stride) : songCalibrationStride()
   };
   saveState();
 }
@@ -1942,10 +2551,125 @@ function saveSongSectionOverride(exercise, override) {
   saveState();
 }
 
+function saveSongArrangementOverride(exercise, override) {
+  if (!exercise?.id) return;
+  const measures = Array.isArray(override?.measures) ? override.measures.map((measure) => sanitizeMeasureForOverride(measure)) : [];
+  state.songArrangementOverrides[exercise.id] = { measures };
+  saveState();
+}
+
 function clearSongTimingOverride(exercise) {
   if (!exercise?.id) return;
-  delete state.songTimingOverrides[exercise.id];
+  const key = timingOverrideStateKey(exercise);
+  delete state.songTimingOverrides[key];
   saveState();
+}
+
+function clearSongArrangementOverride(exercise) {
+  if (!exercise?.id) return;
+  delete state.songArrangementOverrides[exercise.id];
+  saveState();
+}
+
+function songCalibrationStride() {
+  const select = document.getElementById("songTapStrideSelect");
+  if (select instanceof HTMLSelectElement) {
+    const value = Number.parseInt(select.value || "", 10);
+    if ([1, 2, 4, 8].includes(value)) return value;
+  }
+  return [1, 2, 4, 8].includes(Number(state.songCalibrationStride)) ? Number(state.songCalibrationStride) : 1;
+}
+
+function baselineSongBarStarts(exercise) {
+  function normalizeStarts(rawStarts) {
+    const baseStarts = Array.isArray(rawStarts) ? rawStarts : [];
+    const firstFinite = baseStarts.find((n) => Number.isFinite(n));
+    const first = Number.isFinite(firstFinite) ? Number(firstFinite) : 0;
+    const starts = baseStarts.map((n, idx) => {
+      if (Number.isFinite(n)) return Number((Number(n) - first).toFixed(2));
+      if (idx > 0 && Number.isFinite(baseStarts[idx - 1])) {
+        return Number((Number(baseStarts[idx - 1]) - first + 3.4).toFixed(2));
+      }
+      return Number((idx * 3.4).toFixed(2));
+    });
+    for (let i = 1; i < starts.length; i += 1) {
+      if (!Number.isFinite(starts[i])) starts[i] = Number((starts[i - 1] + 3.4).toFixed(2));
+      if (starts[i] <= starts[i - 1]) {
+        starts[i] = Number((starts[i - 1] + 0.2).toFixed(2));
+      }
+    }
+    if (starts.length) starts[0] = 0;
+    return starts;
+  }
+
+  const keySongs = songRowsForKey(state.selectedKey);
+  const fallback = Array.isArray(exercise?.songData?.measures)
+    ? exercise.songData.measures.map((measure) => Number(measure.startSec || 0))
+    : [];
+  if (!Array.isArray(keySongs) || !keySongs.length) return normalizeStarts(fallback);
+  const sourceSong = keySongs[state.songIndex];
+  if (!Array.isArray(sourceSong?.measures) || !sourceSong.measures.length) return normalizeStarts(fallback);
+  return normalizeStarts(sourceSong.measures.map((measure) => Number(measure.startSec || 0)));
+}
+
+function interpolateSongBarStarts(totalBars, baselineStarts, anchors) {
+  const starts = Array.from({ length: totalBars }, (_, idx) => {
+    const fromBaseline = Number(baselineStarts?.[idx]);
+    if (Number.isFinite(fromBaseline)) return fromBaseline;
+    if (idx > 0 && Number.isFinite(baselineStarts?.[idx - 1])) return Number(baselineStarts[idx - 1]) + 3.4;
+    return idx * 3.4;
+  });
+  const anchorEntries = Object.entries(anchors || {})
+    .map(([k, v]) => ({ idx: Number.parseInt(k, 10), time: Number(v) }))
+    .filter((row) => Number.isInteger(row.idx) && row.idx >= 0 && row.idx < totalBars && Number.isFinite(row.time))
+    .sort((a, b) => a.idx - b.idx);
+  if (!anchorEntries.length) return starts;
+
+  for (const row of anchorEntries) {
+    starts[row.idx] = row.time;
+  }
+
+  const first = anchorEntries[0];
+  const firstBaseline = Number(baselineStarts?.[first.idx]);
+  const firstShift = Number.isFinite(firstBaseline) ? first.time - firstBaseline : 0;
+  for (let i = 0; i < first.idx; i += 1) {
+    const base = Number(baselineStarts?.[i]);
+    starts[i] = Number.isFinite(base) ? base + firstShift : starts[i];
+  }
+
+  for (let a = 0; a < anchorEntries.length - 1; a += 1) {
+    const left = anchorEntries[a];
+    const right = anchorEntries[a + 1];
+    const span = right.idx - left.idx;
+    if (span <= 1) continue;
+    const step = (right.time - left.time) / span;
+    for (let i = 1; i < span; i += 1) {
+      starts[left.idx + i] = Number((left.time + step * i).toFixed(2));
+    }
+  }
+
+  const last = anchorEntries[anchorEntries.length - 1];
+  const lastBaseline = Number(baselineStarts?.[last.idx]);
+  const lastShift = Number.isFinite(lastBaseline) ? last.time - lastBaseline : 0;
+  for (let i = last.idx + 1; i < totalBars; i += 1) {
+    const base = Number(baselineStarts?.[i]);
+    starts[i] = Number.isFinite(base) ? base + lastShift : starts[i];
+  }
+
+  for (let i = 1; i < starts.length; i += 1) {
+    if (!Number.isFinite(starts[i])) starts[i] = starts[i - 1] + 3.4;
+    if (starts[i] <= starts[i - 1]) {
+      starts[i] = Number((starts[i - 1] + 0.2).toFixed(2));
+    }
+  }
+  return starts.map((value) => Number(Number(value).toFixed(2)));
+}
+
+function nextAnchorIndex(currentIndex, totalBars, stride) {
+  if (currentIndex >= totalBars - 1) return totalBars;
+  const tentative = currentIndex + Math.max(1, stride);
+  if (tentative >= totalBars - 1) return totalBars - 1;
+  return tentative;
 }
 
 function currentPlaybackTime() {
@@ -2035,6 +2759,128 @@ function renderSongSectionEditor(exercise) {
   timeInput.value = override?.timeSignature || section?.sectionTimeSignature || song.timeSignature || "";
 }
 
+function renderSongSourceSelector(songData) {
+  const select = document.getElementById("songArrangementSourceSelect");
+  if (!(select instanceof HTMLSelectElement) || !songData?.id) return;
+  const variants = Array.isArray(songData.sourceVariants) && songData.sourceVariants.length
+    ? songData.sourceVariants
+    : [{ id: "default", label: songData.arrangementSource?.label || "Default" }];
+  const selected = selectedSongSourceChoice(songData.id);
+  select.innerHTML = variants.map((row) => {
+    const id = String(row?.id || "default");
+    const label = String(row?.label || id);
+    return `<option value="${id}" ${selected === id ? "selected" : ""}>${label}</option>`;
+  }).join("");
+  select.disabled = !state.songArrangeAccess;
+}
+
+function renderSongArrangementMeta(exercise) {
+  const meta = document.getElementById("songArrangeSelectionMeta");
+  const mergeBtn = document.getElementById("songMergeBarsBtn");
+  const splitBtn = document.getElementById("songSplitBarBtn");
+  if (!meta || !mergeBtn || !splitBtn || !songHasStructuredChart(exercise)) return;
+  const selected = sortedSelectedArrangeBars();
+  const measures = exercise.songData.measures;
+  const inRange = selected.filter((idx) => idx >= 0 && idx < measures.length);
+  state.songArrangeSelectedBars = inRange;
+  const canMerge = inRange.length === 2
+    && inRange[1] === inRange[0] + 1
+    && (measures[inRange[0]]?.section || "") === (measures[inRange[1]]?.section || "");
+  const canSplit = inRange.length === 1;
+  mergeBtn.disabled = !canMerge;
+  splitBtn.disabled = !canSplit;
+  if (!inRange.length) {
+    meta.textContent = "Arrangement edit: click a bar to set playhead; Cmd/Ctrl-click to multi-select bars.";
+    return;
+  }
+  const labels = inRange.map((idx) => idx + 1).join(", ");
+  meta.textContent = `Selected bars: ${labels}. Merge requires 2 adjacent bars in same section. Split requires 1 bar.`;
+}
+
+function lyricEditTargetForExercise(exercise) {
+  if (!songHasStructuredChart(exercise)) return null;
+  const measures = exercise.songData.measures;
+  if (!Array.isArray(measures) || !measures.length) return null;
+  const selected = sortedSelectedArrangeBars();
+  const barIndex = selected.length === 1
+    ? selected[0]
+    : Math.max(0, Math.min(measures.length - 1, Number(songPlayback.activeMeasureIndex || 0)));
+  const measure = measures[barIndex];
+  if (!measure) return null;
+  const events = Array.isArray(measure.chordEvents) && measure.chordEvents.length ? measure.chordEvents : [measure];
+  const rawEvent = Number(songPlayback.activeChordEventIndex || 0);
+  const eventIndex = Math.max(0, Math.min(events.length - 1, rawEvent));
+  const event = events[eventIndex] || measure;
+  return { barIndex, eventIndex, eventCount: events.length, measure, event };
+}
+
+function renderSongLyricsEditor(exercise) {
+  const meta = document.getElementById("songLyricsTargetMeta");
+  const input = document.getElementById("songLyricEditorInput");
+  const applyBtn = document.getElementById("songApplyLyricBtn");
+  const clearBtn = document.getElementById("songClearLyricBtn");
+  if (!meta || !input || !applyBtn || !clearBtn || !songHasStructuredChart(exercise)) return;
+  const target = lyricEditTargetForExercise(exercise);
+  if (!target) {
+    meta.textContent = "Target: select a bar/chord in chart.";
+    input.value = "";
+    input.disabled = true;
+    applyBtn.disabled = true;
+    clearBtn.disabled = true;
+    return;
+  }
+  meta.textContent = `Target: Bar ${target.barIndex + 1} · Chord ${target.eventIndex + 1}/${target.eventCount}`;
+  input.value = String(target.event?.lyric || "");
+  input.disabled = false;
+  applyBtn.disabled = false;
+  clearBtn.disabled = false;
+}
+
+function setLyricForCurrentTarget(exercise, lyricValue) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const target = lyricEditTargetForExercise(exercise);
+  if (!target) return false;
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  const row = measures[target.barIndex];
+  if (!row) return false;
+  const events = Array.isArray(row.chordEvents) && row.chordEvents.length
+    ? row.chordEvents.map((event) => ({ ...event }))
+    : [{
+      chord: row.chordSymbol || "C",
+      roman: row.roman || "I",
+      inversion: row.inversion || "root",
+      lyric: row.lyric || "",
+      beatStart: 1,
+      beatLength: beatsPerBarFromTimeSignature(row.sectionTimeSignature || "4/4")
+    }];
+  events[target.eventIndex] = {
+    ...events[target.eventIndex],
+    lyric: String(lyricValue || "")
+  };
+  row.chordEvents = events;
+  row.lyric = events.find((event) => String(event.lyric || "").trim())?.lyric || "";
+  saveSongArrangementOverride(exercise, { measures });
+  return true;
+}
+
+function triggerSongApplyLyricToTarget() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  const input = document.getElementById("songLyricEditorInput");
+  const nextLyric = input instanceof HTMLTextAreaElement ? input.value : "";
+  if (!setLyricForCurrentTarget(exercise, nextLyric)) return;
+  showToast("Lyric mapped to selected chord");
+  renderPractice();
+}
+
+function triggerSongClearLyricFromTarget() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  if (!setLyricForCurrentTarget(exercise, "")) return;
+  showToast("Lyric cleared from selected chord");
+  renderPractice();
+}
+
 function applySongSectionSettings(exercise) {
   if (!songHasStructuredChart(exercise)) return;
   const select = document.getElementById("songSectionSelect");
@@ -2057,64 +2903,602 @@ function applySongSectionSettings(exercise) {
 
 function renderSongCalibrationMeta(exercise) {
   const meta = document.getElementById("songCalibrationMeta");
+  const anchorBadge = document.getElementById("songLastAnchorBadge");
+  const jumpBtn = document.getElementById("songJumpLastAnchorBtn");
   if (!meta || !songHasStructuredChart(exercise)) return;
   const override = songTimingOverrideForExercise(exercise);
+  const stride = [1, 2, 4, 8].includes(Number(override?.stride)) ? Number(override.stride) : songCalibrationStride();
+  const strideSelect = document.getElementById("songTapStrideSelect");
+  if (strideSelect instanceof HTMLSelectElement) {
+    strideSelect.value = String(stride);
+  }
   const start = Number(exercise.songData?.measures?.[0]?.startSec || 0);
   const totalBars = exercise.songData.measures.length;
-  const isActiveSong = songPlayback.calibrationSongId === exercise.id;
+  const isActiveSong = songPlayback.calibrationSongId === timingCalibrationContextId(exercise);
   const mappedBars = Array.isArray(override?.barStarts) ? override.barStarts.filter((n) => Number.isFinite(n)).length : 0;
+  const anchorRows = override?.anchors && typeof override.anchors === "object"
+    ? Object.entries(override.anchors)
+      .map(([key, value]) => ({ barIndex: Number.parseInt(key, 10), timeSec: Number(value) }))
+      .filter((row) => Number.isInteger(row.barIndex) && row.barIndex >= 0 && row.barIndex < totalBars && Number.isFinite(row.timeSec))
+      .sort((a, b) => a.barIndex - b.barIndex)
+    : [];
+  const anchorCount = anchorRows.length;
   const nextBar = isActiveSong
     ? songPlayback.calibrationNextBarIndex + 1
     : Math.min(mappedBars + 1, totalBars);
+  const boundedNextBar = Math.max(1, Math.min(nextBar, totalBars));
   meta.textContent =
-    `Calibration: start ${start.toFixed(2)}s · mapped ${mappedBars}/${totalBars} bar starts · next tap bar ${Math.min(nextBar, totalBars)}.`;
+    `Calibration: start ${start.toFixed(2)}s · mapped ${mappedBars}/${totalBars} bars · anchors ${anchorCount} · tap every ${stride} bar${stride === 1 ? "" : "s"} · next tap bar ${boundedNextBar}.`;
+  const lastAnchor = anchorRows.length ? anchorRows[anchorRows.length - 1] : null;
+  if (anchorBadge) {
+    anchorBadge.textContent = lastAnchor
+      ? `Last anchor: Bar ${lastAnchor.barIndex + 1} @ ${lastAnchor.timeSec.toFixed(2)}s`
+      : "Last anchor: none";
+  }
+  if (jumpBtn) {
+    const canJump = Boolean(lastAnchor && songPlayback.playerReady && songPlayback.player);
+    jumpBtn.disabled = !canJump;
+    jumpBtn.setAttribute("data-anchor-bar", lastAnchor ? String(lastAnchor.barIndex) : "");
+    jumpBtn.setAttribute("data-anchor-time", lastAnchor ? String(lastAnchor.timeSec) : "");
+  }
 }
 
 function setChartStartFromPlayback(exercise) {
   if (!songHasStructuredChart(exercise)) return;
   const now = currentPlaybackTime();
   if (!Number.isFinite(now)) return;
-  const barStarts = [Number(now.toFixed(2))];
-  saveSongTimingOverride(exercise, { barStarts });
-  songPlayback.calibrationSongId = exercise.id;
-  songPlayback.calibrationNextBarIndex = 1;
+  const totalBars = exercise.songData.measures.length;
+  const stride = songCalibrationStride();
+  state.songCalibrationStride = stride;
+  const baseline = baselineSongBarStarts(exercise);
+  const anchors = { 0: Number(now.toFixed(2)) };
+  const barStarts = interpolateSongBarStarts(totalBars, baseline, anchors);
+  saveSongTimingOverride(exercise, { barStarts, anchors, stride });
+  songPlayback.calibrationSongId = timingCalibrationContextId(exercise);
+  songPlayback.calibrationNextBarIndex = nextAnchorIndex(0, totalBars, stride);
   songPlayback.activeMeasureIndex = 0;
   songPlayback.activeChordEventIndex = 0;
   renderPractice();
 }
 
 function tapNextBarFromPlayback(exercise) {
-  if (!songHasStructuredChart(exercise)) return;
+  if (!songHasStructuredChart(exercise)) return { ok: false, reason: "No song chart loaded." };
   const now = currentPlaybackTime();
-  if (!Number.isFinite(now)) return;
-  const override = songTimingOverrideForExercise(exercise) || { barStarts: [] };
-  const barStarts = Array.isArray(override.barStarts) ? [...override.barStarts] : [];
+  if (!Number.isFinite(now)) return { ok: false, reason: "No playback time yet. Press Play first." };
+  const override = songTimingOverrideForExercise(exercise) || { barStarts: [], anchors: {}, stride: songCalibrationStride() };
+  const stride = songCalibrationStride();
+  state.songCalibrationStride = stride;
+  const baseline = baselineSongBarStarts(exercise);
+  const anchors = override.anchors && typeof override.anchors === "object" ? { ...override.anchors } : {};
 
-  if (songPlayback.calibrationSongId !== exercise.id) {
-    songPlayback.calibrationSongId = exercise.id;
-    songPlayback.calibrationNextBarIndex = barStarts.filter((value) => Number.isFinite(value)).length;
+  const calibrationContextId = timingCalibrationContextId(exercise);
+  const anchorIndexes = Object.keys(anchors)
+    .map((key) => Number.parseInt(key, 10))
+    .filter((idx) => Number.isInteger(idx) && idx >= 0)
+    .sort((a, b) => a - b);
+  const expectedWriteIndex = anchorIndexes.length
+    ? nextAnchorIndex(anchorIndexes[anchorIndexes.length - 1], exercise.songData.measures.length, stride)
+    : 0;
+  if (songPlayback.calibrationSongId !== calibrationContextId) {
+    songPlayback.calibrationSongId = calibrationContextId;
   }
+  songPlayback.calibrationNextBarIndex = expectedWriteIndex;
 
   const total = exercise.songData.measures.length;
-  const writeIndex = Math.max(0, songPlayback.calibrationNextBarIndex);
-  if (writeIndex >= total) return;
-  const previousStart = writeIndex > 0 ? Number(barStarts[writeIndex - 1]) : null;
-  if (Number.isFinite(previousStart) && now <= previousStart) return;
+  const writeIndex = Math.max(0, Math.min(total, expectedWriteIndex));
+  if (writeIndex >= total) return { ok: false, reason: "All bars already anchored." };
+  const previousAnchorIndexes = Object.keys(anchors)
+    .map((key) => Number.parseInt(key, 10))
+    .filter((idx) => Number.isInteger(idx) && idx < writeIndex)
+    .sort((a, b) => a - b);
+  const previousAnchorIndex = previousAnchorIndexes.length ? previousAnchorIndexes[previousAnchorIndexes.length - 1] : null;
+  const previousStart = Number.isInteger(previousAnchorIndex) ? Number(anchors[previousAnchorIndex]) : null;
+  if (Number.isFinite(previousStart) && now <= previousStart) {
+    return { ok: false, reason: "Tap ignored: playback moved backward before last anchor." };
+  }
 
-  barStarts[writeIndex] = Number(now.toFixed(2));
-  saveSongTimingOverride(exercise, { barStarts });
-  songPlayback.calibrationNextBarIndex = Math.min(writeIndex + 1, total);
+  anchors[writeIndex] = Number(now.toFixed(2));
+  const barStarts = interpolateSongBarStarts(total, baseline, anchors);
+  saveSongTimingOverride(exercise, { barStarts, anchors, stride });
+  songPlayback.calibrationNextBarIndex = nextAnchorIndex(writeIndex, total, stride);
+  songPlayback.activeMeasureIndex = writeIndex;
+  const capturedMeasure = exercise.songData?.measures?.[writeIndex];
+  const capturedEventIndex = getChordEventIndexForTime(capturedMeasure, now);
+  songPlayback.activeChordEventIndex = capturedEventIndex;
+  updateSongChartHighlight(exercise, writeIndex, capturedEventIndex, now);
+  const keyboardExercise = buildSongMeasureExercise(exercise, writeIndex, capturedEventIndex);
+  renderKeyboard(keyboardExercise);
+  if (capturedMeasure) {
+    const event = chordEventForMeasure(capturedMeasure, capturedEventIndex) || capturedMeasure;
+    const eventCount = Array.isArray(capturedMeasure?.chordEvents) ? capturedMeasure.chordEvents.length : 1;
+    const eventText = eventCount > 1 ? ` · Chord ${capturedEventIndex + 1}/${eventCount}` : "";
+    const sequence = document.getElementById("noteSequence");
+    if (sequence) {
+      sequence.textContent =
+        `Section: ${capturedMeasure.section || "Song"} (${capturedMeasure.formTag || "-"}) · Chord: ${compactChordSymbol(event?.chordDisplay || event?.chordSymbol)} (${event?.romanDisplay || event?.roman}) · ${event?.inversionLabel || "Root position"}${eventText}${(event?.lyric || capturedMeasure?.lyric) ? ` · Lyric: ${event?.lyric || capturedMeasure?.lyric}` : ""}`;
+    }
+  }
   renderPractice();
+  return { ok: true, barIndex: writeIndex, timeSec: Number(now.toFixed(2)) };
 }
 
 function resetSongTimingCalibration(exercise) {
   if (!songHasStructuredChart(exercise)) return;
-  clearSongTimingOverride(exercise);
-  songPlayback.calibrationSongId = exercise.id;
+  const totalBars = exercise.songData.measures.length;
+  const stride = songCalibrationStride();
+  state.songCalibrationStride = stride;
+  const baseline = baselineSongBarStarts(exercise);
+  const barStarts = interpolateSongBarStarts(totalBars, baseline, {});
+  saveSongTimingOverride(exercise, { barStarts, anchors: {}, stride });
+  songPlayback.calibrationSongId = timingCalibrationContextId(exercise);
   songPlayback.calibrationNextBarIndex = 0;
   songPlayback.activeMeasureIndex = 0;
   songPlayback.activeChordEventIndex = 0;
   renderPractice();
+}
+
+function autoSeedSongTiming(exercise) {
+  if (!songHasStructuredChart(exercise)) return;
+  const totalBars = exercise.songData.measures.length;
+  const stride = songCalibrationStride();
+  state.songCalibrationStride = stride;
+  const baseline = baselineSongBarStarts(exercise);
+  const anchors = baseline.length ? { 0: Number(baseline[0]) } : {};
+  const barStarts = interpolateSongBarStarts(totalBars, baseline, anchors);
+  saveSongTimingOverride(exercise, { barStarts, anchors, stride });
+  songPlayback.calibrationSongId = timingCalibrationContextId(exercise);
+  songPlayback.calibrationNextBarIndex = nextAnchorIndex(0, totalBars, stride);
+  songPlayback.activeMeasureIndex = 0;
+  songPlayback.activeChordEventIndex = 0;
+  renderPractice();
+}
+
+function fitRemainingSongTimingFromAnchors(exercise) {
+  if (!songHasStructuredChart(exercise)) return;
+  const totalBars = exercise.songData.measures.length;
+  if (!totalBars) return;
+  const stride = songCalibrationStride();
+  state.songCalibrationStride = stride;
+  const baseline = baselineSongBarStarts(exercise);
+  const override = songTimingOverrideForExercise(exercise) || { barStarts: [], anchors: {}, stride };
+  const anchors = override.anchors && typeof override.anchors === "object" ? { ...override.anchors } : {};
+  const anchorRows = Object.entries(anchors)
+    .map(([key, value]) => ({ idx: Number.parseInt(key, 10), time: Number(value) }))
+    .filter((row) => Number.isInteger(row.idx) && row.idx >= 0 && row.idx < totalBars && Number.isFinite(row.time))
+    .sort((a, b) => a.idx - b.idx);
+  if (!anchorRows.length) return;
+
+  const baseStarts = interpolateSongBarStarts(totalBars, baseline, anchors);
+  const lastAnchor = anchorRows[anchorRows.length - 1];
+
+  let secPerBar = 3.4;
+  if (anchorRows.length >= 2) {
+    const first = anchorRows[0];
+    const spanBars = Math.max(1, lastAnchor.idx - first.idx);
+    secPerBar = (lastAnchor.time - first.time) / spanBars;
+  } else {
+    const idx = lastAnchor.idx;
+    const prev = idx > 0 ? Number(baseStarts[idx - 1]) : null;
+    if (Number.isFinite(prev)) secPerBar = lastAnchor.time - prev;
+    else if (Number.isFinite(Number(baseline[idx + 1])) && Number.isFinite(Number(baseline[idx]))) {
+      secPerBar = Number(baseline[idx + 1]) - Number(baseline[idx]);
+    }
+  }
+  if (!Number.isFinite(secPerBar) || secPerBar <= 0.2) secPerBar = 3.4;
+
+  for (let i = lastAnchor.idx + 1; i < totalBars; i += 1) {
+    baseStarts[i] = Number((lastAnchor.time + secPerBar * (i - lastAnchor.idx)).toFixed(2));
+  }
+  for (let i = 1; i < baseStarts.length; i += 1) {
+    if (baseStarts[i] <= baseStarts[i - 1]) {
+      baseStarts[i] = Number((baseStarts[i - 1] + 0.2).toFixed(2));
+    }
+  }
+
+  saveSongTimingOverride(exercise, {
+    barStarts: baseStarts,
+    anchors,
+    stride
+  });
+  songPlayback.calibrationSongId = timingCalibrationContextId(exercise);
+  songPlayback.calibrationNextBarIndex = nextAnchorIndex(lastAnchor.idx, totalBars, stride);
+  renderPractice();
+}
+
+function sortedSelectedArrangeBars() {
+  return Array.from(new Set(state.songArrangeSelectedBars.filter((idx) => Number.isInteger(idx) && idx >= 0))).sort((a, b) => a - b);
+}
+
+function scrollSongBarIntoView(barIndex) {
+  const chart = document.getElementById("songChart");
+  const card = document.getElementById("songPracticeCard");
+  if (!chart || !card || !Number.isInteger(barIndex) || barIndex < 0) return;
+  const selector = `.song-measure[data-song-measure="${barIndex}"]`;
+  requestAnimationFrame(() => {
+    card.scrollIntoView({ block: "start", behavior: "smooth" });
+    requestAnimationFrame(() => {
+      const el = chart.querySelector(selector);
+      if (el) el.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    });
+  });
+}
+
+function toggleArrangeBarSelection(index) {
+  if (!Number.isInteger(index) || index < 0) return;
+  if (state.songArrangeSelectedBars.includes(index)) {
+    state.songArrangeSelectedBars = state.songArrangeSelectedBars.filter((value) => value !== index);
+  } else {
+    state.songArrangeSelectedBars = [...state.songArrangeSelectedBars, index];
+  }
+}
+
+function mergeSelectedSongBars(exercise) {
+  if (!songHasStructuredChart(exercise)) return;
+  const selected = sortedSelectedArrangeBars();
+  if (selected.length < 2) return;
+  if (selected.length !== 2) return;
+  if (selected[1] !== selected[0] + 1) return;
+
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  const left = measures[selected[0]];
+  const right = measures[selected[1]];
+  if (!left || !right) return;
+  if ((left.section || "") !== (right.section || "")) return;
+
+  const leftDuration = Math.max(0.2, Number(left.endSec || 0) - Number(left.startSec || 0) || 3.4);
+  const rightDuration = Math.max(0.2, Number(right.endSec || 0) - Number(right.startSec || 0) || 3.4);
+  const mergedDuration = Number(((leftDuration + rightDuration) / 2).toFixed(2));
+  const leftPrimary = left.chordEvents?.[0] || { chord: left.chordSymbol || "C", roman: left.roman || "I", inversion: left.inversion || "root", lyric: left.lyric || "" };
+  const rightPrimary = right.chordEvents?.[0] || { chord: right.chordSymbol || "C", roman: right.roman || "I", inversion: right.inversion || "root", lyric: right.lyric || "" };
+
+  const merged = sanitizeMeasureForOverride({
+    ...left,
+    lyric: [left.lyric, right.lyric].filter(Boolean).join(" ").trim(),
+    startSec: left.startSec,
+    endSec: Number((Number(left.startSec || 0) + mergedDuration).toFixed(2)),
+    chordEvents: [
+      { ...leftPrimary, beatStart: 1, beatLength: 2 },
+      { ...rightPrimary, beatStart: 3, beatLength: 2 }
+    ]
+  });
+
+  const nextMeasures = [
+    ...measures.slice(0, selected[0]),
+    merged,
+    ...measures.slice(selected[1] + 1)
+  ];
+  const timed = recalculateMeasureTimes(nextMeasures);
+  const previousTiming = songTimingOverrideForExercise(exercise);
+  const previousAnchors = previousTiming?.anchors && typeof previousTiming.anchors === "object"
+    ? previousTiming.anchors
+    : {};
+  const remappedAnchors = remapAnchorsByTime(previousAnchors, timed);
+  const stride = [1, 2, 4, 8].includes(Number(previousTiming?.stride))
+    ? Number(previousTiming.stride)
+    : songCalibrationStride();
+  const baseline = timed.map((measure) => Number(measure.startSec || 0));
+  const barStarts = interpolateSongBarStarts(timed.length, baseline, remappedAnchors);
+  saveSongArrangementOverride(exercise, { measures: timed });
+  saveSongTimingOverride(exercise, { barStarts, anchors: remappedAnchors, stride });
+  state.songArrangeSelectedBars = [selected[0]];
+  if (songPlayback.calibrationSongId === timingCalibrationContextId(exercise)) {
+    const anchorIndexes = Object.keys(remappedAnchors)
+      .map((key) => Number.parseInt(key, 10))
+      .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < timed.length)
+      .sort((a, b) => a - b);
+    const lastAnchor = anchorIndexes.length ? anchorIndexes[anchorIndexes.length - 1] : 0;
+    songPlayback.calibrationNextBarIndex = nextAnchorIndex(lastAnchor, timed.length, stride);
+  }
+  renderPractice();
+}
+
+function splitSelectedSongBar(exercise) {
+  if (!songHasStructuredChart(exercise)) return;
+  const selected = sortedSelectedArrangeBars();
+  if (selected.length !== 1) return;
+  const index = selected[0];
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  const source = measures[index];
+  if (!source) return;
+
+  const duration = Math.max(0.4, Number(source.endSec || 0) - Number(source.startSec || 0) || 3.4);
+  const half = Number((duration / 2).toFixed(2));
+  const firstEvent = (source.chordEvents || []).find((event) => Number(event.beatStart || 1) < 3) || source.chordEvents?.[0];
+  const secondEvent = (source.chordEvents || []).find((event) => Number(event.beatStart || 1) >= 3) || source.chordEvents?.[1] || firstEvent;
+  if (!firstEvent || !secondEvent) return;
+
+  const firstMeasure = sanitizeMeasureForOverride({
+    ...source,
+    lyric: firstEvent.lyric || source.lyric || "",
+    startSec: source.startSec,
+    endSec: Number((Number(source.startSec || 0) + half).toFixed(2)),
+    chordEvents: [{ ...firstEvent, beatStart: 1, beatLength: 4 }]
+  });
+  const secondMeasure = sanitizeMeasureForOverride({
+    ...source,
+    lyric: secondEvent.lyric || "",
+    startSec: Number((Number(source.startSec || 0) + half).toFixed(2)),
+    endSec: Number(source.endSec || 0),
+    chordEvents: [{ ...secondEvent, beatStart: 1, beatLength: 4 }]
+  });
+
+  const nextMeasures = [
+    ...measures.slice(0, index),
+    firstMeasure,
+    secondMeasure,
+    ...measures.slice(index + 1)
+  ];
+  const timed = recalculateMeasureTimes(nextMeasures);
+  const previousTiming = songTimingOverrideForExercise(exercise);
+  const previousAnchors = previousTiming?.anchors && typeof previousTiming.anchors === "object"
+    ? previousTiming.anchors
+    : {};
+  const remappedAnchors = remapAnchorsByTime(previousAnchors, timed);
+  const stride = [1, 2, 4, 8].includes(Number(previousTiming?.stride))
+    ? Number(previousTiming.stride)
+    : songCalibrationStride();
+  const baseline = timed.map((measure) => Number(measure.startSec || 0));
+  const barStarts = interpolateSongBarStarts(timed.length, baseline, remappedAnchors);
+  saveSongArrangementOverride(exercise, { measures: timed });
+  saveSongTimingOverride(exercise, { barStarts, anchors: remappedAnchors, stride });
+  state.songArrangeSelectedBars = [index, index + 1];
+  if (songPlayback.calibrationSongId === timingCalibrationContextId(exercise)) {
+    const anchorIndexes = Object.keys(remappedAnchors)
+      .map((key) => Number.parseInt(key, 10))
+      .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < timed.length)
+      .sort((a, b) => a - b);
+    const lastAnchor = anchorIndexes.length ? anchorIndexes[anchorIndexes.length - 1] : 0;
+    songPlayback.calibrationNextBarIndex = nextAnchorIndex(lastAnchor, timed.length, stride);
+  }
+  renderPractice();
+}
+
+function resetSongArrangement(exercise) {
+  if (!songHasStructuredChart(exercise)) return;
+  clearSongArrangementOverride(exercise);
+  state.songArrangeSelectedBars = [];
+  renderPractice();
+}
+
+function triggerSongSetChartStart() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  setChartStartFromPlayback(exercise);
+  showToast("Chart start set to current playback time");
+}
+
+function triggerSongPlayAndSetStart() {
+  const exercise = currentExercise();
+  if (songHasStructuredChart(exercise)) {
+    setChartStartFromPlayback(exercise);
+    showToast("Bar 1 armed at current position");
+  }
+  if (songPlayback.playerReady && songPlayback.player && typeof songPlayback.player.playVideo === "function") {
+    ensureSongPlayerAudible();
+    songPlayback.player.playVideo();
+  }
+}
+
+function ensureSongPlayerAudible() {
+  if (!songPlayback.playerReady || !songPlayback.player) return;
+  try {
+    if (typeof songPlayback.player.isMuted === "function" && songPlayback.player.isMuted() && typeof songPlayback.player.unMute === "function") {
+      songPlayback.player.unMute();
+    }
+  } catch {
+    // ignore player API errors
+  }
+}
+
+function triggerSongTapNextBar() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) {
+    showToast("No song chart loaded.");
+    return;
+  }
+  const before = songTimingOverrideForExercise(exercise);
+  const beforeCount = before?.anchors && typeof before.anchors === "object" ? Object.keys(before.anchors).length : 0;
+  const result = tapNextBarFromPlayback(exercise);
+  if (!result?.ok) {
+    if (result?.reason) showToast(result.reason);
+    return;
+  }
+  const after = songTimingOverrideForExercise(exercise);
+  const afterCount = after?.anchors && typeof after.anchors === "object" ? Object.keys(after.anchors).length : 0;
+  if (afterCount > beforeCount) {
+    const rows = Object.keys(after.anchors).map((k) => Number.parseInt(k, 10)).filter((v) => Number.isInteger(v)).sort((a, b) => a - b);
+    const last = rows.length ? rows[rows.length - 1] : null;
+    const timeText = Number.isFinite(result?.timeSec) ? ` @ ${Number(result.timeSec).toFixed(2)}s` : "";
+    showToast(last !== null ? `Anchor captured: Bar ${last + 1}${timeText}` : "Anchor captured");
+  }
+}
+
+function triggerSongResetTiming() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  resetSongTimingCalibration(exercise);
+  showToast("Timing overrides reset");
+}
+
+function triggerSongAutoSeedTiming() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  autoSeedSongTiming(exercise);
+  showToast("Auto-seeded timing grid");
+}
+
+function triggerSongFitRemainingTiming() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  fitRemainingSongTimingFromAnchors(exercise);
+  showToast("Filled remaining bars from anchor tempo");
+}
+
+function triggerSongJumpToLastAnchor() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  const override = songTimingOverrideForExercise(exercise);
+  if (!override?.anchors || typeof override.anchors !== "object") {
+    showToast("No anchors available");
+    return;
+  }
+  const totalBars = exercise.songData.measures.length;
+  const anchorRows = Object.entries(override.anchors)
+    .map(([key, value]) => ({ barIndex: Number.parseInt(key, 10), timeSec: Number(value) }))
+    .filter((row) => Number.isInteger(row.barIndex) && row.barIndex >= 0 && row.barIndex < totalBars && Number.isFinite(row.timeSec))
+    .sort((a, b) => a.barIndex - b.barIndex);
+  if (!anchorRows.length) {
+    showToast("No anchors available");
+    return;
+  }
+  const timingKey = timingOverrideStateKey(exercise);
+  const timingSnapshot = JSON.stringify(state.songTimingOverrides?.[timingKey] || null);
+  const lastAnchor = anchorRows[anchorRows.length - 1];
+  songPlayback.activeMeasureIndex = lastAnchor.barIndex;
+  songPlayback.activeChordEventIndex = 0;
+  state.songArrangeSelectedBars = [lastAnchor.barIndex];
+  if (songPlayback.playerReady && songPlayback.player && typeof songPlayback.player.seekTo === "function") {
+    songPlayback.player.seekTo(Number(lastAnchor.timeSec), true);
+  }
+  renderPractice();
+  const timingAfter = JSON.stringify(state.songTimingOverrides?.[timingKey] || null);
+  if (timingAfter !== timingSnapshot) {
+    state.songTimingOverrides[timingKey] = timingSnapshot ? JSON.parse(timingSnapshot) : null;
+    if (!state.songTimingOverrides[timingKey]) delete state.songTimingOverrides[timingKey];
+    saveState();
+    renderPractice();
+  }
+  scrollSongBarIntoView(lastAnchor.barIndex);
+  showToast(`Jumped to Bar ${lastAnchor.barIndex + 1}`);
+}
+
+function clearSongAnchorsFromBar(exercise, fromBarOneBased) {
+  if (!songHasStructuredChart(exercise)) return;
+  const override = songTimingOverrideForExercise(exercise);
+  if (!override?.anchors || typeof override.anchors !== "object") {
+    showToast("No anchors to clear");
+    return;
+  }
+  const totalBars = exercise.songData.measures.length;
+  const fromIndex = Math.max(0, Math.min(totalBars - 1, Number(fromBarOneBased) - 1));
+  const originalAnchors = Object.entries(override.anchors)
+    .map(([key, value]) => ({ idx: Number.parseInt(key, 10), time: Number(value) }))
+    .filter((row) => Number.isInteger(row.idx) && row.idx >= 0 && Number.isFinite(row.time));
+  const originalCount = originalAnchors.length;
+  const nextAnchors = Object.fromEntries(
+    Object.entries(override.anchors)
+      .map(([key, value]) => [Number.parseInt(key, 10), Number(value)])
+      .filter(([idx, time]) => Number.isInteger(idx) && idx >= 0 && idx < fromIndex && Number.isFinite(time))
+      .map(([idx, time]) => [String(idx), time])
+  );
+  const stride = [1, 2, 4, 8].includes(Number(override.stride)) ? Number(override.stride) : songCalibrationStride();
+  const baseline = baselineSongBarStarts(exercise);
+  const barStarts = interpolateSongBarStarts(totalBars, baseline, nextAnchors);
+  saveSongTimingOverride(exercise, { barStarts, anchors: nextAnchors, stride });
+  const remainingAnchorIndexes = Object.keys(nextAnchors)
+    .map((key) => Number.parseInt(key, 10))
+    .filter((idx) => Number.isInteger(idx) && idx >= 0)
+    .sort((a, b) => a - b);
+  const lastAnchor = remainingAnchorIndexes.length ? remainingAnchorIndexes[remainingAnchorIndexes.length - 1] : 0;
+  songPlayback.calibrationSongId = timingCalibrationContextId(exercise);
+  songPlayback.calibrationNextBarIndex = remainingAnchorIndexes.length
+    ? nextAnchorIndex(lastAnchor, totalBars, stride)
+    : 0;
+  songPlayback.activeMeasureIndex = lastAnchor;
+  songPlayback.activeChordEventIndex = 0;
+  state.songArrangeSelectedBars = [lastAnchor];
+  renderPractice();
+  scrollSongBarIntoView(lastAnchor);
+  const nextCount = Object.keys(nextAnchors).length;
+  const removed = Math.max(0, originalCount - nextCount);
+  showToast(removed > 0
+    ? `Cleared ${removed} anchor${removed === 1 ? "" : "s"} from Bar ${fromIndex + 1}+`
+    : `No anchors found at/after Bar ${fromIndex + 1}`);
+}
+
+function triggerSongMergeSelectedBars() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  const selected = sortedSelectedArrangeBars();
+  if (selected.length !== 2 || selected[1] !== selected[0] + 1) {
+    showToast("Select exactly 2 adjacent bars to merge");
+    return;
+  }
+  const measures = exercise.songData.measures;
+  if ((measures[selected[0]]?.section || "") !== (measures[selected[1]]?.section || "")) {
+    showToast("Merged bars must be in the same section");
+    return;
+  }
+  mergeSelectedSongBars(exercise);
+  showToast(`Merged Bars ${selected[0] + 1}-${selected[1] + 1}`);
+}
+
+function triggerSongSplitSelectedBar() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  const selected = sortedSelectedArrangeBars();
+  if (selected.length !== 1) {
+    showToast("Select exactly 1 bar to split");
+    return;
+  }
+  splitSelectedSongBar(exercise);
+  showToast(`Split Bar ${selected[0] + 1}`);
+}
+
+function triggerSongResetArrangement() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  resetSongArrangement(exercise);
+  showToast("Arrangement reset to base chart");
+}
+
+async function analyzeAndApplyChordsForBar(exercise, barIndex) {
+  if (!songHasStructuredChart(exercise)) return;
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  const bounded = Math.max(0, Math.min(measures.length - 1, Number(barIndex) || 0));
+  const measure = measures[bounded];
+  if (!measure) return;
+  const beatsPerBar = beatsPerBarFromTimeSignature(measure.sectionTimeSignature || exercise.songData.timeSignature || "4/4");
+  const startSec = Number(measure.startSec || 0);
+  const endSec = Number(measure.endSec || startSec + 3.4);
+  if (!Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec <= startSec) {
+    showToast("Bar timing is invalid. Set timing anchors first.");
+    return;
+  }
+
+  const response = await fetch("/api/song/analyze-bar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      songId: exercise.songData?.id || "let-it-be",
+      startSec,
+      endSec,
+      beatsPerBar
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok || !Array.isArray(payload?.events) || !payload.events.length) {
+    throw new Error(String(payload?.message || "No chord events detected for this bar"));
+  }
+
+  const existingLyric = String(measure.lyric || "");
+  measure.chordEvents = payload.events.map((event, idx) => ({
+    chord: String(event?.chord || "C"),
+    roman: romanForChordInC(event?.chord || "C"),
+    inversion: String(event?.chord || "").includes("/") ? "inversion" : "root",
+    lyric: idx === 0 ? existingLyric : "",
+    beatStart: Number(event?.beatStart || idx + 1),
+    beatLength: Number(event?.beatLength || 1)
+  }));
+  measure.lyric = existingLyric;
+  hydrateSongMeasureTiming(measure, measure.sectionTimeSignature || exercise.songData.timeSignature || "4/4");
+
+  saveSongArrangementOverride(exercise, { measures });
+  state.songArrangeSelectedBars = [bounded];
+  songPlayback.activeMeasureIndex = bounded;
+  songPlayback.activeChordEventIndex = 0;
+  renderPractice();
+  showToast(`Chord analysis applied to Bar ${bounded + 1}`);
 }
 
 window.onYouTubeIframeAPIReady = () => {
@@ -2135,9 +3519,13 @@ function renderSongPractice(exercise) {
     return;
   }
 
+  if (!state.songArrangeAccess && state.songTrainerMode === "arrange") {
+    state.songTrainerMode = "play";
+  }
   const song = exercise.songData;
   chartCard.classList.remove("hidden");
-  const isArrangeMode = state.songTrainerMode === "arrange";
+  const canArrange = Boolean(state.songArrangeAccess);
+  const isArrangeMode = canArrange && state.songTrainerMode === "arrange";
   const isMinimalPlayalong = !isArrangeMode && songPlayback.videoPlaying && state.songPlayalongFocus;
   if (infoCard) {
     const hideInfoCard = isMinimalPlayalong && !state.songShowVideoInPlayMode;
@@ -2152,30 +3540,50 @@ function renderSongPractice(exercise) {
   document.getElementById("songKeyMeta").textContent = `Key: ${song.songKey || "n/a"}`;
   document.getElementById("songTimeSignatureMeta").textContent = `Time Signature: ${song.timeSignature || "n/a"}`;
   document.getElementById("songProgressionMeta").textContent = `Progression: ${song.romanProgression || "n/a"}`;
-  document.getElementById("songArrangementMeta").textContent = `Arrangement: ${arrangementSummary(song)}`;
+  document.getElementById("songInfoArrangementMeta").textContent = `Arrangement: ${arrangementSummary(song)}`;
+  document.getElementById("songArrangementSourceMeta").textContent =
+    `Arrangement Source: ${song.arrangementSource?.label || "n/a"}`;
+  renderSongSourceSelector(song);
+  const sourceControl = document.getElementById("songSourceVersionControl");
+  if (sourceControl) {
+    sourceControl.classList.toggle("hidden", !canArrange);
+  }
   document.getElementById("songCredits").textContent = Array.isArray(song.credits) && song.credits.length
     ? `Credits: ${song.credits.join(" · ")}`
     : "Credits: n/a";
   const modeRow = document.getElementById("songModeButtons");
   if (modeRow) {
-    modeRow.classList.toggle("hidden", isMinimalPlayalong);
+    modeRow.classList.toggle("hidden", isMinimalPlayalong || !canArrange);
     modeRow.querySelectorAll("button[data-song-mode]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.songMode === state.songTrainerMode);
     });
   }
   const arrangeTools = document.getElementById("songArrangeTools");
   if (arrangeTools) {
-    arrangeTools.classList.toggle("hidden", !isArrangeMode);
+    arrangeTools.classList.toggle("hidden", !isArrangeMode || !canArrange);
+  }
+  const tapFab = document.getElementById("songTapNextBarFab");
+  if (tapFab) {
+    const showFab = isArrangeMode && state.screen === "practice" && state.block === "song";
+    tapFab.classList.toggle("hidden", !showFab);
   }
   const playBtn = document.getElementById("songPlayBtn");
   const pauseBtn = document.getElementById("songPauseBtn");
+  const playBtnArrange = document.getElementById("songPlayBtnArrange");
+  const pauseBtnArrange = document.getElementById("songPauseBtnArrange");
   if (playBtn && pauseBtn) {
-    const showTransport = !isArrangeMode && state.songPlayalongFocus;
+    const showTransport = isArrangeMode || (!isArrangeMode && state.songPlayalongFocus);
     playBtn.classList.toggle("hidden", !showTransport);
     pauseBtn.classList.toggle("hidden", !showTransport);
     const canControl = Boolean(songPlayback.playerReady && songPlayback.player);
     playBtn.disabled = !canControl;
     pauseBtn.disabled = !canControl;
+    if (playBtnArrange && pauseBtnArrange) {
+      playBtnArrange.classList.toggle("hidden", !isArrangeMode);
+      pauseBtnArrange.classList.toggle("hidden", !isArrangeMode);
+      playBtnArrange.disabled = !canControl;
+      pauseBtnArrange.disabled = !canControl;
+    }
   }
   const toggleVideoBtn = document.getElementById("songToggleVideoBtn");
   if (toggleVideoBtn) {
@@ -2189,6 +3597,9 @@ function renderSongPractice(exercise) {
     focusModeBtn.textContent = state.songPlayalongFocus ? "Exit Playback Mode" : "Enter Playback Mode";
   }
   renderSongCalibrationMeta(exercise);
+  renderSongArrangeScrubber(exercise);
+  renderSongArrangementMeta(exercise);
+  renderSongLyricsEditor(exercise);
   renderSongSectionEditor(exercise);
 
   const activeIndex = songPlayback.videoPlaying
@@ -2197,6 +3608,14 @@ function renderSongPractice(exercise) {
   const activeEventIndex = songPlayback.videoPlaying
     ? Math.max(0, songPlayback.activeChordEventIndex || 0)
     : -1;
+  const timingOverride = songTimingOverrideForExercise(exercise);
+  const anchoredBarSet = new Set(
+    timingOverride?.anchors && typeof timingOverride.anchors === "object"
+      ? Object.keys(timingOverride.anchors)
+        .map((key) => Number.parseInt(key, 10))
+        .filter((idx) => Number.isInteger(idx) && idx >= 0)
+      : []
+  );
   const sectionGroups = groupedSongMeasures(song);
   document.getElementById("songChart").innerHTML = sectionGroups.map((group) => `
     <section class="song-section-block">
@@ -2206,8 +3625,11 @@ function renderSongPractice(exercise) {
       </header>
       <div class="song-chart-grid">
         ${group.rows.map(({ measure, index }) => `
-          <article class="song-measure ${index === activeIndex ? "active" : ""}" data-song-measure="${index}">
-            <p class="song-bar">Bar ${index + 1}</p>
+          <article class="song-measure ${index === activeIndex ? "active" : ""} ${state.songArrangeSelectedBars.includes(index) ? "selected-arrange" : ""} ${isArrangeMode && index === songPlayback.activeMeasureIndex ? "playhead-arrange" : ""} ${isArrangeMode && anchoredBarSet.has(index) ? "anchored-arrange" : ""}" data-song-measure="${index}">
+            <div class="song-bar-row">
+              <p class="song-bar">Bar ${index + 1}</p>
+              ${isArrangeMode ? `<button class="btn outlined song-analyze-bar-btn" type="button" data-action="song-analyze-bar" data-song-measure="${index}">Get Chords</button>` : ""}
+            </div>
             ${(() => {
               const displayEvent = chordEventForMeasure(measure, index === activeIndex ? activeEventIndex : 0) || measure;
               const events = Array.isArray(measure.chordEvents) && measure.chordEvents.length ? measure.chordEvents : [measure];
@@ -2245,6 +3667,9 @@ function renderPractice() {
   const exercise = applyInversionStepMode(applyChordStepMode(applyScaleMode(currentExercise())));
   const isTechniqueLesson = state.block === "technique";
   const isSongLesson = !isTechniqueLesson;
+  if (isSongLesson && !state.songArrangeAccess && state.songTrainerMode !== "play") {
+    state.songTrainerMode = "play";
+  }
   const isArpeggioLesson = isTechniqueLesson && exercise?.moduleId === "arpeggios";
   const isBothHandsArpeggio = isArpeggioLesson && state.arpeggioMode === "both";
   const isScaleLesson = isTechniqueLesson && exercise?.moduleId === "scales";
@@ -2596,6 +4021,7 @@ function moveExercise(delta) {
     state.songIndex = (state.songIndex + delta + total) % total;
     songPlayback.activeMeasureIndex = 0;
     songPlayback.activeChordEventIndex = 0;
+    state.songArrangeSelectedBars = [];
   }
   renderPractice();
 }
@@ -2605,12 +4031,14 @@ function beginBlock(blockName, index = 0) {
   if (blockName === "technique") state.techniqueIndex = index;
   if (blockName === "song") {
     state.songIndex = index;
+    state.songArrangeAccess = false;
     state.songTrainerMode = "play";
     state.songPlayalongFocus = false;
     state.songShowVideoInPlayMode = false;
     songPlayback.videoPlaying = false;
     songPlayback.activeMeasureIndex = 0;
     songPlayback.activeChordEventIndex = 0;
+    state.songArrangeSelectedBars = [];
   }
   state.chordStepIndex = 0;
   state.inversionStepIndex = 0;
@@ -2676,15 +4104,23 @@ function openLessonsForKey(keyName) {
 
 function wireEvents() {
   document.getElementById("navCircleBtn").addEventListener("click", () => {
+    state.songArrangeAccess = false;
     showScreen("circle");
     renderNav();
   });
   document.getElementById("navLessonsBtn").addEventListener("click", () => {
+    state.songArrangeAccess = false;
     showScreen("lessons");
     renderLessons();
     renderNav();
   });
+  document.getElementById("navAdminBtn").addEventListener("click", () => {
+    showScreen("admin");
+    renderAdmin();
+    renderNav();
+  });
   document.getElementById("navHistoryBtn").addEventListener("click", () => {
+    state.songArrangeAccess = false;
     showScreen("history");
     renderHistory();
     renderNav();
@@ -2783,6 +4219,17 @@ function wireEvents() {
   });
 
   document.getElementById("songChart").addEventListener("click", (event) => {
+    const analyzeBtn = event.target.closest("button[data-action='song-analyze-bar'][data-song-measure]");
+    if (analyzeBtn) {
+      const exercise = currentExercise();
+      if (!songHasStructuredChart(exercise)) return;
+      const rawBar = Number.parseInt(analyzeBtn.dataset.songMeasure || "", 10);
+      if (!Number.isInteger(rawBar)) return;
+      analyzeAndApplyChordsForBar(exercise, rawBar)
+        .catch((error) => showToast(error?.message || "Bar analysis failed"));
+      return;
+    }
+
     const chip = event.target.closest(".song-chord-event-chip[data-song-measure][data-song-event]");
     const measureEl = event.target.closest(".song-measure[data-song-measure]");
     if (!measureEl) return;
@@ -2801,6 +4248,27 @@ function wireEvents() {
     const boundedEventIndex = Number.isInteger(requestedEventIndex)
       ? Math.max(0, Math.min(events.length - 1, requestedEventIndex))
       : 0;
+    if (state.songTrainerMode === "arrange") {
+      const multiSelect = Boolean(event.metaKey || event.ctrlKey || event.shiftKey);
+      if (multiSelect) {
+        toggleArrangeBarSelection(bounded);
+        const selected = sortedSelectedArrangeBars();
+        showToast(selected.length ? `Selected bars: ${selected.map((idx) => idx + 1).join(", ")}` : "Selection cleared");
+        renderPractice();
+        return;
+      } else {
+        state.songArrangeSelectedBars = [bounded];
+        songPlayback.activeMeasureIndex = bounded;
+        songPlayback.activeChordEventIndex = boundedEventIndex;
+        const targetEvent = chordEventForMeasure(measure, boundedEventIndex) || measure;
+        if (songPlayback.playerReady && songPlayback.player && typeof songPlayback.player.seekTo === "function") {
+          songPlayback.player.seekTo(Number(targetEvent.startSec || measure.startSec || 0), true);
+        }
+        showToast(`Playhead set to Bar ${bounded + 1}`);
+        renderPractice();
+        return;
+      }
+    }
     songPlayback.activeMeasureIndex = bounded;
     songPlayback.activeChordEventIndex = boundedEventIndex;
     const targetEvent = chordEventForMeasure(measure, boundedEventIndex) || measure;
@@ -2813,14 +4281,17 @@ function wireEvents() {
   document.getElementById("songModeButtons").addEventListener("click", (event) => {
     const btn = event.target.closest("button[data-song-mode]");
     if (!btn) return;
+    if (!state.songArrangeAccess && btn.dataset.songMode === "arrange") return;
     const mode = btn.dataset.songMode === "arrange" ? "arrange" : "play";
     state.songTrainerMode = mode;
     if (mode === "arrange") {
       state.songPlayalongFocus = false;
       state.songShowVideoInPlayMode = true;
+      state.songArrangeSelectedBars = [];
     } else {
       state.songPlayalongFocus = false;
       state.songShowVideoInPlayMode = false;
+      state.songArrangeSelectedBars = [];
     }
     renderPractice();
   });
@@ -2829,6 +4300,20 @@ function wireEvents() {
     const target = event.target;
     if (!(target instanceof HTMLSelectElement)) return;
     state.selectedSongSection = target.value;
+    renderPractice();
+  });
+
+  document.getElementById("songArrangementSourceSelect").addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const exercise = currentExercise();
+    const songId = exercise?.songData?.id || "let-it-be";
+    state.songSourceChoice[songId] = String(target.value || "default");
+    clearSongArrangementOverride(exercise);
+    state.songArrangeSelectedBars = [];
+    songPlayback.activeMeasureIndex = 0;
+    songPlayback.activeChordEventIndex = 0;
+    saveState();
     renderPractice();
   });
 
@@ -2855,6 +4340,13 @@ function wireEvents() {
 
   document.getElementById("songPlayBtn").addEventListener("click", () => {
     if (!songPlayback.playerReady || !songPlayback.player || typeof songPlayback.player.playVideo !== "function") return;
+    ensureSongPlayerAudible();
+    songPlayback.player.playVideo();
+  });
+
+  document.getElementById("songPlayBtnArrange").addEventListener("click", () => {
+    if (!songPlayback.playerReady || !songPlayback.player || typeof songPlayback.player.playVideo !== "function") return;
+    ensureSongPlayerAudible();
     songPlayback.player.playVideo();
   });
 
@@ -2863,19 +4355,235 @@ function wireEvents() {
     songPlayback.player.pauseVideo();
   });
 
-  document.getElementById("songSetChartStartBtn").addEventListener("click", () => {
-    const exercise = currentExercise();
-    setChartStartFromPlayback(exercise);
+  document.getElementById("songPauseBtnArrange").addEventListener("click", () => {
+    if (!songPlayback.playerReady || !songPlayback.player || typeof songPlayback.player.pauseVideo !== "function") return;
+    songPlayback.player.pauseVideo();
   });
 
-  document.getElementById("songTapNextBarBtn").addEventListener("click", () => {
+  document.getElementById("songSetChartStartBtn").addEventListener("click", triggerSongSetChartStart);
+  document.getElementById("songPlayAndSetStartBtn").addEventListener("click", triggerSongPlayAndSetStart);
+
+  document.getElementById("songTapNextBarBtn").addEventListener("click", triggerSongTapNextBar);
+
+  document.getElementById("songResetTimingBtn").addEventListener("click", triggerSongResetTiming);
+
+  document.getElementById("songAutoSeedTimingBtn").addEventListener("click", triggerSongAutoSeedTiming);
+  document.getElementById("songFitRemainingTimingBtn").addEventListener("click", triggerSongFitRemainingTiming);
+  document.getElementById("songJumpLastAnchorBtn").addEventListener("click", triggerSongJumpToLastAnchor);
+  document.getElementById("songClearAnchorsFromBtn").addEventListener("click", () => {
     const exercise = currentExercise();
-    tapNextBarFromPlayback(exercise);
+    if (!songHasStructuredChart(exercise)) return;
+    const input = document.getElementById("songClearAnchorsFromInput");
+    const raw = input instanceof HTMLInputElement ? Number.parseInt(input.value || "", 10) : NaN;
+    if (!Number.isInteger(raw) || raw < 1) {
+      showToast("Enter a valid bar number (1 or greater)");
+      return;
+    }
+    clearSongAnchorsFromBar(exercise, raw);
+  });
+  document.getElementById("songMergeBarsBtn").addEventListener("click", triggerSongMergeSelectedBars);
+  document.getElementById("songSplitBarBtn").addEventListener("click", triggerSongSplitSelectedBar);
+  document.getElementById("songResetArrangementBtn").addEventListener("click", triggerSongResetArrangement);
+  document.getElementById("songApplyLyricBtn").addEventListener("click", triggerSongApplyLyricToTarget);
+  document.getElementById("songClearLyricBtn").addEventListener("click", triggerSongClearLyricFromTarget);
+
+  document.getElementById("songTapNextBarFab").addEventListener("click", triggerSongTapNextBar);
+
+  document.getElementById("songArrangeScrubber").addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    const exercise = currentExercise();
+    if (!songHasStructuredChart(exercise)) return;
+    songPlayback.scrubberDragging = true;
+    const duration = songDurationSecForExercise(exercise);
+    const preview = Number(target.value || 0);
+    const bounded = Number.isFinite(preview) ? Math.max(0, Math.min(duration, preview)) : 0;
+    const meta = document.getElementById("songArrangeScrubberMeta");
+    if (meta) {
+      meta.textContent = `${formatSongTimeClock(bounded)} / ${formatSongTimeClock(duration)}`;
+    }
   });
 
-  document.getElementById("songResetTimingBtn").addEventListener("click", () => {
+  document.getElementById("songArrangeScrubber").addEventListener("change", (event) => {
+    const target = event.target;
+    const seekTo = target instanceof HTMLInputElement ? Number(target.value || 0) : NaN;
     const exercise = currentExercise();
-    resetSongTimingCalibration(exercise);
+    if (songHasStructuredChart(exercise)
+      && songPlayback.playerReady
+      && songPlayback.player
+      && typeof songPlayback.player.seekTo === "function"
+      && Number.isFinite(seekTo)) {
+      songPlayback.player.seekTo(seekTo, true);
+      syncSongFollowAlong(exercise, true);
+    }
+    songPlayback.scrubberDragging = false;
+  });
+
+  document.getElementById("songTapStrideSelect").addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const nextStride = Number.parseInt(target.value || "", 10);
+    state.songCalibrationStride = [1, 2, 4, 8].includes(nextStride) ? nextStride : 4;
+    const exercise = currentExercise();
+    if (songHasStructuredChart(exercise)) {
+      const override = songTimingOverrideForExercise(exercise);
+      if (override) {
+        saveSongTimingOverride(exercise, {
+          barStarts: override.barStarts,
+          anchors: override.anchors,
+          stride: state.songCalibrationStride
+        });
+        if (songPlayback.calibrationSongId === timingCalibrationContextId(exercise)) {
+          const anchorIndexes = Object.keys(override.anchors || {})
+            .map((key) => Number.parseInt(key, 10))
+            .filter((idx) => Number.isInteger(idx) && idx >= 0)
+            .sort((a, b) => a - b);
+          const lastAnchor = anchorIndexes.length ? anchorIndexes[anchorIndexes.length - 1] : 0;
+          songPlayback.calibrationNextBarIndex = nextAnchorIndex(
+            lastAnchor,
+            exercise.songData.measures.length,
+            state.songCalibrationStride
+          );
+        }
+      } else {
+        saveState();
+      }
+      renderSongCalibrationMeta(exercise);
+    } else {
+      saveState();
+    }
+  });
+
+  document.getElementById("adminSongKeyFilter").addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    state.adminSongKeyFilter = String(target.value || "all");
+    saveState();
+    renderAdmin();
+  });
+
+  document.getElementById("adminSongList").addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-action='admin-select-song'][data-song-id]");
+    if (!btn) return;
+    state.adminSelectedSongId = String(btn.dataset.songId || "");
+    saveState();
+    renderAdmin();
+  });
+
+  document.getElementById("adminSongDetail").addEventListener("click", (event) => {
+    if (event.target.closest("#adminRunAutoDraftNowBtn")) {
+      fetch("/api/admin/auto-draft/run", { method: "POST" })
+        .then(async (response) => {
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const message = typeof body?.message === "string" ? body.message : "Unable to start auto-draft";
+            throw new Error(message);
+          }
+          adminAutoDraft.status = body.state || adminAutoDraftFallbackStatus();
+          renderAdminAutoDraftStatus();
+          startAdminAutoDraftPolling();
+          showToast("Auto-draft started");
+        })
+        .catch((error) => {
+          showToast(error?.message || "Auto-draft failed to start");
+          fetchAdminAutoDraftStatus().catch(() => {});
+        });
+      return;
+    }
+
+    const chooseVideoBtn = event.target.closest("button[data-action='admin-choose-video'][data-song-id][data-video-id]");
+    if (chooseVideoBtn) {
+      const songId = String(chooseVideoBtn.dataset.songId || "");
+      const videoId = String(chooseVideoBtn.dataset.videoId || "");
+      if (!songId || !videoId) return;
+      state.songVideoChoice[songId] = videoId;
+      saveState();
+      renderAdmin();
+      const activeExercise = currentExercise();
+      if (state.screen === "practice" && state.block === "song" && activeExercise?.songData?.id === songId) {
+        renderPractice();
+      }
+      return;
+    }
+
+    if (event.target.closest("#adminAutoArrangeBtn")) {
+      const rows = allAdminSongSpecs();
+      const selected = rows.find((row) => row.song?.id === state.adminSelectedSongId) || rows[0];
+      if (!selected?.song?.id) return;
+      const songId = selected.song.id;
+      const chosenDraftId = Array.isArray(selected.song.sourceVariants)
+        && selected.song.sourceVariants.some((row) => String(row?.id) === "let-it-be-hybrid-v2")
+        ? "let-it-be-hybrid-v2"
+        : "default";
+      state.songSourceChoice[songId] = chosenDraftId;
+      const keyName = selected.keyName || "C";
+      const curriculum = buildCurriculumForKey(keyName);
+      const songIndex = curriculum.songs.findIndex((row) => row.songData?.id === songId);
+      const exercise = songIndex >= 0 ? curriculum.songs[songIndex] : null;
+      if (exercise?.id) {
+        delete state.songArrangementOverrides[exercise.id];
+        delete state.songTimingOverrides[exercise.id];
+        const sourceKey = `${exercise.id}::${chosenDraftId}`;
+        delete state.songTimingOverrides[sourceKey];
+        const legacyDefaultKey = `${exercise.id}::default`;
+        delete state.songTimingOverrides[legacyDefaultKey];
+      }
+      saveState();
+      showToast("Auto-arrange draft selected. Open arrangement page to review.");
+      renderAdmin();
+      return;
+    }
+
+    if (event.target.closest("#adminOpenArrangementBtn")) {
+      const rows = allAdminSongSpecs();
+      const selected = rows.find((row) => row.song?.id === state.adminSelectedSongId) || rows[0];
+      if (!selected?.song?.id) return;
+      openAdminArrangement(selected.song.id, selected.keyName || "C");
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    const isTypingTarget = target instanceof HTMLInputElement
+      || target instanceof HTMLTextAreaElement
+      || target instanceof HTMLSelectElement
+      || Boolean(target && target instanceof HTMLElement && target.isContentEditable);
+    if (isTypingTarget) return;
+    const isSongArrangeContext = state.screen === "practice"
+      && state.block === "song"
+      && state.songTrainerMode === "arrange";
+    if (!isSongArrangeContext) return;
+
+    const key = String(event.key || "").toLowerCase();
+    if (key === "t" || key === " ") {
+      event.preventDefault();
+      triggerSongTapNextBar();
+      return;
+    }
+    if (key === "s") {
+      event.preventDefault();
+      triggerSongSetChartStart();
+      return;
+    }
+    if (key === "r") {
+      event.preventDefault();
+      triggerSongResetTiming();
+      return;
+    }
+    if (key === "a") {
+      event.preventDefault();
+      triggerSongAutoSeedTiming();
+      return;
+    }
+    if (key === "f") {
+      event.preventDefault();
+      triggerSongFitRemainingTiming();
+      return;
+    }
+    if (key === "p") {
+      event.preventDefault();
+      triggerSongPlayAndSetStart();
+    }
   });
 
   document.getElementById("pauseTimerBtn").addEventListener("click", toggleTimer);
@@ -2945,6 +4653,7 @@ function init() {
   renderGlobalMeta();
   renderCircle();
   renderLessons();
+  renderAdmin();
   renderHistory();
   renderPractice();
   renderSessionTimerControls();

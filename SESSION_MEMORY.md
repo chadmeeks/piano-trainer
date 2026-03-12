@@ -1,6 +1,6 @@
 # Piano Trainer - Session Memory
 
-Last updated: 2026-03-10
+Last updated: 2026-03-12
 Repo: `git@github.com:chadmeeks/piano-trainer.git`
 Primary branch: `main`
 
@@ -9,6 +9,7 @@ Primary branch: `main`
 - Top-level screens:
   - Circle (default)
   - Lessons
+  - Admin
   - History
 - Circle of Fifths supports key selection and key-complete visual state.
 - Lessons screen contains:
@@ -32,6 +33,23 @@ Primary branch: `main`
     - Chord-event chips render horizontally per bar.
     - Mini staff renders beat-aligned chord events with time-signature guides.
     - Active chord highlighting is shown only while playback is actively playing.
+    - Lesson entry is playalong-only; arrange tools are available via Admin workflow.
+    - Source selector and timing are source-scoped by arrangement source.
+    - Per-bar `Get Chords` can apply beat-level chord events from anchored timing windows.
+    - Per-bar analysis can infer slash-chord inversions.
+
+## Admin arrangement workflow
+
+- Admin screen supports:
+  - Song list + key filter (currently Let It Be)
+  - YouTube candidate selection
+  - `Run Auto-draft Now` with progress steps/logs
+  - `Auto-arrange` to switch to current auto-draft source
+  - Open arrangement page in arrange mode
+- Backend API endpoints:
+  - `POST /api/admin/auto-draft/run`
+  - `GET /api/admin/auto-draft/status`
+  - `POST /api/song/analyze-bar`
 
 ## Important interaction model
 
@@ -53,8 +71,10 @@ Primary branch: `main`
 
 ## Song trainer state model
 
-- Per-song timing calibration persisted in `songTimingOverrides[exerciseId].barStarts`.
+- Per-song timing calibration persisted in `songTimingOverrides[exerciseId::sourceId].barStarts`.
 - Per-song section metadata persisted in `songSectionOverrides[exerciseId].sections`.
+- Per-song arrangement edits persisted in `songArrangementOverrides[exerciseId].measures`.
+- Per-song source/video selection persisted in `songSourceChoice` / `songVideoChoice`.
 - Song follow-along runtime tracks:
   - `activeMeasureIndex`
   - `activeChordEventIndex`
@@ -75,7 +95,7 @@ Primary branch: `main`
 
 ## Last pushed commit
 
-- `f7478f4` - Refine song chart playback cues and multi-chord bar notation
+- Pending push in current working session (admin split, autodraft API/progress, timing fixes, per-bar chord analysis).
 
 ## Suggested next steps
 

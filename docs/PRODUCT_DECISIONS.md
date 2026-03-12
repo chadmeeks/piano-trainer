@@ -8,6 +8,7 @@
 ## Navigation Decisions
 
 - Default entry: Circle of Fifths.
+- Dedicated `Admin` screen added for song arrangement/prep tooling.
 - Dedicated `History` screen added (not embedded in Lessons).
 - `Prev/Next` in practice reserved for chapter navigation.
 
@@ -25,6 +26,7 @@
   - song info and song chart are separate cards
   - explicit play vs arrange mode split
   - playback mode emphasizes chart + keyboard visibility
+  - lesson-launched song practice is playalong-focused; arrange controls are admin-gated
 
 ## Visual Guidance Decisions
 
@@ -49,8 +51,19 @@
   - month calendar + day details
 - Song-specific calibration decisions:
   - chart timing is calibrated from playback (`Set Chart Start`, `Tap Next Bar`)
-  - calibration is persisted per song
+  - calibration is persisted per song/source variant
   - section key/time signatures are editable and persisted per song
+  - per-bar chord re-analysis can be requested from the chart (`Get Chords`)
+  - per-bar analysis can infer slash inversions from estimated bass note
+
+## Admin + Auto-draft Decisions
+
+- Keep arrangement-generation local-first:
+  - `Run Auto-draft Now` executes local analysis tools and publishes draft data
+  - progress is visible in-step (prepare audio, harmony stem, analyze, publish)
+- Keep application separate from generation:
+  - `Auto-arrange` applies the current generated draft source
+  - generation and application are intentionally separate controls
 
 ## Tradeoffs Accepted
 

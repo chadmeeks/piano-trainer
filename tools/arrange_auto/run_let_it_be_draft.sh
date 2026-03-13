@@ -45,7 +45,6 @@ ffmpeg -y -i "$AUDIO_STEREO" \
   -ar 44100 "$AUDIO_HARMONY" >/dev/null 2>&1
 echo "DONE|build_harmony"
 
-echo "STEP|analyze|Analyze beats, chords, and lyrics"
 python3 "$ROOT/tools/arrange_auto/make_draft.py" \
   --audio "$AUDIO_IN" \
   --audio-alt "$AUDIO_HARMONY" \
@@ -53,7 +52,6 @@ python3 "$ROOT/tools/arrange_auto/make_draft.py" \
   --out-dir "$OUT_DIR" \
   --chart-start 0.0 \
   --max-bars 96
-echo "DONE|analyze"
 
 echo "Draft complete:"
 echo "  $OUT_DIR/draft-summary.md"

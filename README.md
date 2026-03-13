@@ -57,9 +57,30 @@ npm start
 - `Admin` screen is the arrangement/prep workspace.
 - Lesson flow is playalong-focused; arrangement controls are gated to admin-launched workflow.
 - Auto-draft tools:
-  - `Run Auto-draft Now` runs local analysis and publishes `public/song-drafts.js`.
-  - `Auto-arrange` applies the current auto-draft source version to the song.
-  - Per-bar `Get Chords` analyzes the anchored bar window and can infer slash-chord inversions.
+  - `Run Auto Draft` runs local analysis and publishes `public/song-drafts.js`.
+  - Draft run now reports granular stages:
+    - analyze beat grid
+    - build chord events
+    - align sections and lyrics
+  - On success, source is set to `Auto Generated Draft`.
+  - `Open Arrangement Page` is enabled only after setup prerequisites are complete.
+- Per-bar `Get Chords` analyzes the anchored bar window and can infer slash-chord inversions.
+
+## Arrangement workflow highlights
+
+- Setup gating:
+  - upload lyrics file
+  - select source video
+  - run auto draft
+- Arrange tools:
+  - timing capture (`Tap Next Bar`, `Fill Remaining Bars`)
+  - `Rebuild From Anchors` (retime + all-bar chord rebuild + lyric remap)
+  - bar editing (merge/split/insert/delete)
+  - per-event lyric editing in chart cards
+- Versions:
+  - `Save Current`, `Save As New`, `Duplicate`, `Load`, `Set Final`, `Delete`
+  - `Source Version` selector includes base sources and saved versions
+  - final version is used for playback flow
 
 ## Documentation
 

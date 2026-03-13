@@ -11,6 +11,7 @@ const CHORDINO_TXT = path.join(__dirname, "tmp", "analysis-out", "let-it-be-draf
 const CHORDINO_ALT_TXT = path.join(__dirname, "tmp", "analysis-out", "let-it-be-draft", "chordino-alt.txt");
 const NOTES_TXT = path.join(__dirname, "tmp", "analysis-out", "let-it-be-draft", "notes.txt");
 const SONG_DRAFTS_JS = path.join(PUBLIC_DIR, "song-drafts.js");
+const LYRICS_FILE = path.join(__dirname, "let_it_be_lyrics");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -27,7 +28,9 @@ const MIME_TYPES = {
 const AUTO_DRAFT_STEP_LABELS = {
   prepare_audio: "Prepare audio input",
   build_harmony: "Build harmony-focused stem",
-  analyze: "Analyze beats/chords/lyrics",
+  analyze_beats: "Analyze beat grid",
+  build_chords: "Build chord events",
+  align_sections: "Align sections and lyrics",
   publish: "Publish draft to app",
   complete: "Finalize"
 };
@@ -168,7 +171,7 @@ function publishDraftToApp() {
   const parsed = JSON.parse(raw);
   const draftPayload = {
     id: "let-it-be-hybrid-v2",
-    label: "Auto Hybrid Draft v2",
+    label: "Auto Generated Draft",
     source: String(parsed?.source || "auto-draft"),
     chart_start_sec: Number(parsed?.chart_start_sec || 12),
     bar_duration_sec: Number(parsed?.bar_duration_sec || 3.4),
@@ -512,6 +515,25 @@ const server = http.createServer((req, res) => {
       return;
     }
     sendJson(res, 202, { ok: true, state: autoDraft });
+    return;
+  }
+
+  if (reqUrl.pathname === "/api/admin/lyrics/save" && req.method === "POST") {
+    readRequestJson(req)
+      .then((payload) => {
+        const lyricsText = String(payload?.lyricsText || "");
+        if (!lyricsText.trim()) {
+          throw new Error("Lyrics text is required");
+        }
+        if (lyricsText.length > 300000) {
+          throw new Error("Lyrics file is too large");
+        }
+        fs.writeFileSync(LYRICS_FILE, lyricsText, "utf8");
+        sendJson(res, 200, { ok: true });
+      })
+      .catch((error) => {
+        sendJson(res, 400, { ok: false, message: String(error?.message || "Could not save lyrics") });
+      });
     return;
   }
 

@@ -51,6 +51,9 @@ Main in-memory + persisted state includes:
     - `songArrangementOverrides`
     - `songSourceChoice`
     - `songVideoChoice`
+    - `songArrangementVersions`
+    - `songVersionSelectionBySong`
+    - `adminSongPrep`
 - Timer/session:
   - `blockSecondsRemaining`
   - `timerRunning`, `timerSessionActive`
@@ -91,6 +94,14 @@ Main in-memory + persisted state includes:
 - Calendar aggregates stored day entries.
 - Day selection reveals lesson list + practice duration.
 
+6. Arrangement workflow:
+- Admin setup gates arrangement entry (`lyrics + video + autodraft`).
+- Auto-draft publishes `public/song-drafts.js` from local analysis output.
+- Arrange mode tools can:
+  - fit timing from anchors
+  - rebuild from anchors (retime + all-bar chord rebuild + lyric remap)
+  - save/load named arrangement versions and set final playback version
+
 ## 5) Rendering Subsystems
 
 - Keyboard:
@@ -106,6 +117,7 @@ Main in-memory + persisted state includes:
   - sectioned chart blocks (Intro/Verse/Chorus/etc)
   - measure cards with horizontal chord-event chips
   - per-bar mini staff timelines with beat guides and time signature
+  - per-event lyric editing controls in arrange mode
   - active chord-event highlight only while media playback state is `PLAYING`
   - chart follow logic pins active row at top during play mode
 
@@ -114,7 +126,7 @@ Main in-memory + persisted state includes:
 - No cloud backend or sync; APIs are local-only for tooling.
 - No auth/multi-user model.
 - History/progress data is browser-local.
-- Song arrangement data is hand-authored and still iterative.
+- Song arrangement remains iterative; autodraft quality is improved but not final-perfect.
 - YouTube alignment quality depends on manual bar-start calibration.
 
 ## 7) Local API Surface

@@ -274,6 +274,7 @@
                 <div class="song-calibration-controls song-arrange-body">
                   <button id="songAutoSeedTimingBtn" class="btn outlined">Auto-Seed Timing</button>
                   <button id="songFitRemainingTimingBtn" class="btn outlined">Fill Remaining Bars</button>
+                  <button id="songRebuildFromAnchorsBtn" class="btn tonal">Rebuild From Anchors</button>
                   <button id="songResetTimingBtn" class="btn outlined">Reset Timing</button>
                   <label class="song-tap-stride-label" for="songClearAnchorsFromInput">Clear anchors from bar</label>
                   <input id="songClearAnchorsFromInput" class="song-clear-anchor-input" type="number" min="1" step="1" value="1" />
@@ -287,6 +288,8 @@
                 <div class="song-arrangement-controls song-arrange-body">
                   <button id="songMergeBarsBtn" class="btn outlined">Merge Selected Bars</button>
                   <button id="songSplitBarBtn" class="btn outlined">Split Selected Bar</button>
+                  <button id="songInsertBarBtn" class="btn outlined">Insert Bar After</button>
+                  <button id="songAnchorSelectedBarBtn" class="btn outlined">Anchor Selected Bar @ Current Time</button>
                   <button id="songResetArrangementBtn" class="btn outlined">Reset Arrangement</button>
                 </div>
                 <p id="songArrangeSelectionMeta" class="song-calibration-meta">Arrangement edit: select bars in chart.</p>
@@ -321,6 +324,25 @@
                     <input id="songSectionTimeInput" type="text" value="4/4" />
                   </label>
                   <button id="songApplySectionSettingsBtn" class="btn tonal">Apply Section Settings</button>
+                </div>
+              </details>
+
+              <details class="song-arrange-group">
+                <summary class="song-arrange-summary">Versions</summary>
+                <div class="song-arrange-body song-version-grid">
+                  <label for="songVersionSelect">Saved Versions</label>
+                  <select id="songVersionSelect" class="song-source-select"></select>
+                  <label for="songVersionNameInput">Version Name</label>
+                  <input id="songVersionNameInput" type="text" placeholder="Arrangement v1" />
+                  <div class="song-arrangement-controls">
+                    <button id="songSaveVersionBtn" class="btn outlined">Save Current</button>
+                    <button id="songSaveNewVersionBtn" class="btn tonal">Save As New</button>
+                    <button id="songDuplicateVersionBtn" class="btn outlined">Duplicate</button>
+                    <button id="songLoadVersionBtn" class="btn outlined">Load</button>
+                    <button id="songSetFinalVersionBtn" class="btn outlined">Set Final</button>
+                    <button id="songDeleteVersionBtn" class="btn outlined">Delete</button>
+                  </div>
+                  <p id="songVersionMeta" class="song-calibration-meta">No saved versions.</p>
                 </div>
               </details>
               <details class="song-arrange-group song-arrange-help-group">

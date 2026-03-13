@@ -23,14 +23,14 @@ window.PIANO_TRAINER_SONG_LIBRARY = {
       hint: "Hold each bar steady and change chords right on the beat.",
       arrangementSource: {
         id: "let-it-be-user-lyrics-file-v2",
-        label: "User Lyrics File v2",
+        label: "Base Source",
         type: "curated-manual",
         verified: false,
         notes: "Aligned to /let_it_be_lyrics provided by user; replace with licensed reference transcription when available."
       },
       sourceVariants: [
-        { id: "default", label: "User Lyrics File v2" },
-        { id: "let-it-be-hybrid-v2", label: "Auto Hybrid Draft v2" }
+        { id: "default", label: "Base Source" },
+        { id: "let-it-be-hybrid-v2", label: "Auto Generated Draft" }
       ],
       sectionSpecs: [
         {

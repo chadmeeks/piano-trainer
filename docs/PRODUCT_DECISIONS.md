@@ -59,11 +59,36 @@
 ## Admin + Auto-draft Decisions
 
 - Keep arrangement-generation local-first:
-  - `Run Auto-draft Now` executes local analysis tools and publishes draft data
-  - progress is visible in-step (prepare audio, harmony stem, analyze, publish)
-- Keep application separate from generation:
-  - `Auto-arrange` applies the current generated draft source
-  - generation and application are intentionally separate controls
+  - `Run Auto Draft` executes local analysis tools and publishes draft data
+  - progress is visible in staged steps:
+    - prepare audio
+    - build harmony stem
+    - analyze beat grid
+    - build chord events
+    - align sections and lyrics
+    - publish/finalize
+- Setup gating before arrangement access:
+  - valid lyrics file
+  - selected YouTube source
+  - auto-draft completed
+- Auto-draft source is treated as immutable baseline:
+  - user edits are saved as named arrangement versions
+  - playback can pin to a selected final version
+
+## Arrangement Editing Decisions
+
+- Arrange-mode chart exposes per-event lyric editing (not bar-only lyric editing).
+- Timing tools include:
+  - sequential tap anchors
+  - anchor-based fill
+  - rebuild from anchors (retime + all-bar chord rebuild + lyric remap)
+- Version controls available in arrange mode:
+  - save current
+  - save as new
+  - duplicate
+  - load
+  - set final
+  - delete (with safeguards)
 
 ## Tradeoffs Accepted
 

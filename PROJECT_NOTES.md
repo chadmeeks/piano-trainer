@@ -55,7 +55,22 @@ Build a web app that helps practice piano key-by-key:
   - Timing override storage is now source-scoped by arrangement source id.
   - Per-bar `Get Chords` action can analyze anchored bar windows and apply detected chord events.
   - Per-bar chord analysis can infer slash-chord inversions from bass-note estimation.
-  - `Run Auto-draft Now` runs local analysis and streams progress in Admin.
+  - `Run Auto Draft` runs local analysis and streams granular progress stages in Admin.
+  - Auto-draft v3/v4 improvements:
+    - beat-grid phase/pulse detection
+    - section-aware lyric mapping
+    - per-bar chord post-pass for multi-chord splits
+    - false lyric-bar collapse post-pass
+  - Arrange auto-fit improvements:
+    - anchor-based global tempo refit
+    - `Rebuild From Anchors` to rerun chord detection across all bars after retime
+  - Version management in arrange mode:
+    - save current
+    - save as new
+    - duplicate
+    - load
+    - set final for playback
+    - delete with confirmation safeguards
 
 ## Practice Tracking
 

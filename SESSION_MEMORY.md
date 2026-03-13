@@ -1,6 +1,6 @@
 # Piano Trainer - Session Memory
 
-Last updated: 2026-03-12
+Last updated: 2026-03-13
 Repo: `git@github.com:chadmeeks/piano-trainer.git`
 Primary branch: `main`
 
@@ -42,9 +42,9 @@ Primary branch: `main`
 
 - Admin screen supports:
   - Song list + key filter (currently Let It Be)
+  - setup gating checklist (lyrics upload, video selected, auto draft complete)
   - YouTube candidate selection
-  - `Run Auto-draft Now` with progress steps/logs
-  - `Auto-arrange` to switch to current auto-draft source
+  - `Run Auto Draft` with granular progress stages/logs
   - Open arrangement page in arrange mode
 - Backend API endpoints:
   - `POST /api/admin/auto-draft/run`
@@ -75,6 +75,9 @@ Primary branch: `main`
 - Per-song section metadata persisted in `songSectionOverrides[exerciseId].sections`.
 - Per-song arrangement edits persisted in `songArrangementOverrides[exerciseId].measures`.
 - Per-song source/video selection persisted in `songSourceChoice` / `songVideoChoice`.
+- Per-song saved versions persisted in:
+  - `songArrangementVersions[songId]`
+  - `songVersionSelectionBySong[songId]`
 - Song follow-along runtime tracks:
   - `activeMeasureIndex`
   - `activeChordEventIndex`
@@ -82,9 +85,15 @@ Primary branch: `main`
 
 ## Let It Be specifics
 
-- Song arrangement in code now follows:
-  - `Intro -> A B A B Solo C B -> Outro`
-- Chart supports bars with multiple chord events and beat-level event highlighting.
+- Lesson playalong is gated until Admin setup (`autoDraftReady`) is complete.
+- Source selector hides legacy/base source when auto-generated source is available.
+- Arrange mode now supports:
+  - per-event lyric editing in chart cards
+  - `Rebuild From Anchors` (retime + all-bar chord rebuild + lyric remap)
+- Auto-draft now includes:
+  - beat-grid phase/pulse inference
+  - section-aware lyric mapping
+  - false lyric-bar collapse pass
 
 ## Files that matter most
 
@@ -95,7 +104,7 @@ Primary branch: `main`
 
 ## Last pushed commit
 
-- Pending push in current working session (admin split, autodraft API/progress, timing fixes, per-bar chord analysis).
+- Pending push in current working session (arrangement versioning, setup gating, autodraft v3/v4, rebuild-from-anchors).
 
 ## Suggested next steps
 

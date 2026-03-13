@@ -1,105 +1,113 @@
 window.PIANO_TRAINER_SONG_DRAFTS = {
   "let-it-be-hybrid-v2": {
     "id": "let-it-be-hybrid-v2",
-    "label": "Auto Hybrid Draft v2",
-    "source": "aubio-beat + chordino(simplechord) hybrid draft",
+    "label": "Auto Generated Draft",
+    "source": "autodraft-v3 (beat-grid + section-aware lyrics + chord post-pass)",
     "chart_start_sec": 12,
-    "bar_duration_sec": 3.3532,
+    "bar_duration_sec": 3.4241,
     "bars": [
       {
         "bar": 1,
         "chord": "C",
         "lyric": "When I find myself in times of trouble",
-        "confidence": 0.991,
+        "confidence": 1,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 2,
+            "beatLength": 4,
             "lyric": "When I find myself in times of trouble"
-          },
-          {
-            "chord": "G",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": "Mother Mary comes to me"
           }
         ]
       },
       {
         "bar": 2,
-        "chord": "Am",
-        "lyric": "Speaking words of wisdom",
-        "confidence": 0.98,
+        "chord": "G",
+        "lyric": "Mother Mary comes to me",
+        "confidence": 0.996,
         "events": [
           {
-            "chord": "Am",
+            "chord": "G",
             "beatStart": 1,
             "beatLength": 2,
-            "lyric": "Speaking words of wisdom"
+            "lyric": "Mother Mary comes to me"
           },
           {
-            "chord": "F",
+            "chord": "Am",
             "beatStart": 3,
             "beatLength": 2,
-            "lyric": "Let it be"
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 3,
-        "chord": "C",
-        "lyric": "And in my hour of darkness",
-        "confidence": 0.858,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": "And in my hour of darkness"
-          },
-          {
-            "chord": "G",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": "She is standing right in front of me"
-          }
-        ]
-      },
-      {
-        "bar": 4,
         "chord": "F",
-        "lyric": "Speaking words of wisdom",
-        "confidence": 0.897,
+        "lyric": "",
+        "confidence": 0.992,
         "events": [
           {
             "chord": "F",
             "beatStart": 1,
             "beatLength": 2,
-            "lyric": "Speaking words of wisdom"
+            "lyric": ""
           },
           {
             "chord": "C",
             "beatStart": 3,
             "beatLength": 2,
-            "lyric": "Let it be"
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 4,
+        "chord": "G",
+        "lyric": "Speaking words of wisdom",
+        "confidence": 0.991,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Speaking words of wisdom"
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 5,
         "chord": "C",
-        "lyric": "",
-        "confidence": 0.697,
+        "lyric": "Let it be",
+        "confidence": 0.919,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
+            "beatLength": 4,
+            "lyric": "Let it be"
+          }
+        ]
+      },
+      {
+        "bar": 6,
+        "chord": "G",
+        "lyric": "And in my hour of darkness",
+        "confidence": 0.971,
+        "events": [
           {
             "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "And in my hour of darkness"
+          },
+          {
+            "chord": "Am",
             "beatStart": 3,
             "beatLength": 2,
             "lyric": ""
@@ -107,59 +115,407 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         ]
       },
       {
-        "bar": 6,
-        "chord": "Am",
-        "lyric": "",
-        "confidence": 0.823,
-        "events": [
-          {
-            "chord": "Am",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": ""
-          }
-        ]
-      },
-      {
         "bar": 7,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.827,
+        "chord": "F",
+        "lyric": "She is standing right in front of me",
+        "confidence": 1,
         "events": [
           {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "G",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
             "chord": "F",
-            "beatStart": 4,
-            "beatLength": 1,
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "She is standing right in front of me"
+          },
+          {
+            "chord": "C",
+            "beatStart": 3,
+            "beatLength": 2,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 8,
+        "chord": "G",
+        "lyric": "",
+        "confidence": 0.878,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "C",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 9,
+        "chord": "C",
+        "lyric": "Speaking words of wisdom",
+        "confidence": 1,
+        "events": [
+          {
+            "chord": "C",
+            "beatStart": 1,
+            "beatLength": 4,
+            "lyric": "Speaking words of wisdom"
+          }
+        ]
+      },
+      {
+        "bar": 10,
+        "chord": "G",
+        "lyric": "Let it be",
+        "confidence": 0.829,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Let it be"
+          },
+          {
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 11,
+        "chord": "F",
+        "lyric": "Let it be",
+        "confidence": 0.933,
+        "events": [
+          {
+            "chord": "F",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Let it be"
+          },
+          {
+            "chord": "C",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": "let it be"
+          }
+        ]
+      },
+      {
+        "bar": 12,
+        "chord": "G",
+        "lyric": "Let it be",
+        "confidence": 0.884,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Let it be"
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 1,
+            "lyric": "let it be"
+          },
+          {
+            "chord": "C",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 13,
+        "chord": "C",
+        "lyric": "",
+        "confidence": 0.971,
+        "events": [
+          {
+            "chord": "C",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 14,
+        "chord": "C/G",
+        "lyric": "Whisper words of wisdom",
+        "confidence": 0.936,
+        "events": [
+          {
+            "chord": "C/G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Whisper words of wisdom"
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 15,
+        "chord": "C",
+        "lyric": "Let it be",
+        "confidence": 0.98,
+        "events": [
+          {
+            "chord": "C",
+            "beatStart": 1,
+            "beatLength": 4,
+            "lyric": "Let it be"
+          }
+        ]
+      },
+      {
+        "bar": 16,
+        "chord": "G",
+        "lyric": "And when the broken-hearted people",
+        "confidence": 0.784,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "And when the broken-hearted people"
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 17,
+        "chord": "C",
+        "lyric": "Living in the world agree",
+        "confidence": 1,
+        "events": [
+          {
+            "chord": "C",
+            "beatStart": 1,
+            "beatLength": 4,
+            "lyric": "Living in the world agree"
+          }
+        ]
+      },
+      {
+        "bar": 18,
+        "chord": "G",
+        "lyric": "",
+        "confidence": 0.832,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 19,
+        "chord": "F",
+        "lyric": "There will be an answer",
+        "confidence": 0.927,
+        "events": [
+          {
+            "chord": "F",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "There will be an answer"
+          },
+          {
+            "chord": "C",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 20,
+        "chord": "G",
+        "lyric": "Let it be",
+        "confidence": 0.593,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Let it be"
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "Dm",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 21,
+        "chord": "C",
+        "lyric": "For though they may be parted",
+        "confidence": 0.998,
+        "events": [
+          {
+            "chord": "C",
+            "beatStart": 1,
+            "beatLength": 4,
+            "lyric": "For though they may be parted"
+          }
+        ]
+      },
+      {
+        "bar": 22,
+        "chord": "G",
+        "lyric": "There is still a chance that they will see",
+        "confidence": 0.99,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "There is still a chance that they will see"
+          },
+          {
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 23,
+        "chord": "F",
+        "lyric": "",
+        "confidence": 0.982,
+        "events": [
+          {
+            "chord": "F",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "C",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 24,
+        "chord": "G",
+        "lyric": "There will be an answer",
+        "confidence": 0.66,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "There will be an answer"
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "C/E",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 25,
+        "chord": "C",
+        "lyric": "Let it be",
+        "confidence": 1,
+        "events": [
+          {
+            "chord": "C",
+            "beatStart": 1,
+            "beatLength": 1,
+            "lyric": "Let it be"
+          },
+          {
+            "chord": "Am",
+            "beatStart": 2,
+            "beatLength": 3,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 26,
+        "chord": "C/G",
+        "lyric": "Let it be",
+        "confidence": 0.9,
+        "events": [
+          {
+            "chord": "C/G",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Let it be"
+          },
+          {
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": "let it be"
+          }
+        ]
+      },
+      {
+        "bar": 27,
         "chord": "C",
         "lyric": "",
         "confidence": 1,
@@ -173,520 +529,116 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         ]
       },
       {
-        "bar": 9,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.831,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "G",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "Am",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 10,
-        "chord": "F",
-        "lyric": "",
-        "confidence": 0.607,
-        "events": [
-          {
-            "chord": "F",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 11,
-        "chord": "G",
-        "lyric": "",
-        "confidence": 0.479,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 12,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.899,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "Am",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 13,
-        "chord": "C/G",
-        "lyric": "",
-        "confidence": 0.751,
-        "events": [
-          {
-            "chord": "C/G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 14,
-        "chord": "C",
-        "lyric": "Let it be",
-        "confidence": 0.954,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 4,
-            "lyric": "Let it be"
-          }
-        ]
-      },
-      {
-        "bar": 15,
-        "chord": "G",
-        "lyric": "let it be",
-        "confidence": 0.844,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": "let it be"
-          },
-          {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": "Let it be"
-          }
-        ]
-      },
-      {
-        "bar": 16,
-        "chord": "C",
-        "lyric": "let it be",
-        "confidence": 0.929,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 4,
-            "lyric": "let it be"
-          }
-        ]
-      },
-      {
-        "bar": 17,
-        "chord": "G",
-        "lyric": "Whisper words of wisdom",
-        "confidence": 0.838,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": "Whisper words of wisdom"
-          },
-          {
-            "chord": "Am",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": "Let it be"
-          }
-        ]
-      },
-      {
-        "bar": 18,
-        "chord": "F",
-        "lyric": "",
-        "confidence": 0.798,
-        "events": [
-          {
-            "chord": "F",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 19,
-        "chord": "G",
-        "lyric": "",
-        "confidence": 0.363,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 20,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.662,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 4,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 21,
-        "chord": "G",
-        "lyric": "",
-        "confidence": 0.544,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "Am",
-            "beatStart": 3,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 22,
-        "chord": "F",
-        "lyric": "",
-        "confidence": 0.559,
-        "events": [
-          {
-            "chord": "F",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 23,
-        "chord": "G",
-        "lyric": "And when the broken-hearted people",
-        "confidence": 0.285,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": "And when the broken-hearted people"
-          },
-          {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 1,
-            "lyric": "Living in the world agree"
-          },
-          {
-            "chord": "Dm",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": "There will be an answer"
-          }
-        ]
-      },
-      {
-        "bar": 24,
-        "chord": "C",
-        "lyric": "Let it be",
-        "confidence": 0.891,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": "Let it be"
-          },
-          {
-            "chord": "Am",
-            "beatStart": 2,
-            "beatLength": 3,
-            "lyric": "For though they may be parted"
-          }
-        ]
-      },
-      {
-        "bar": 25,
-        "chord": "C/G",
-        "lyric": "There is still a chance that they will see",
-        "confidence": 0.812,
-        "events": [
-          {
-            "chord": "C/G",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": "There is still a chance that they will see"
-          },
-          {
-            "chord": "G",
-            "beatStart": 2,
-            "beatLength": 1,
-            "lyric": "There will be an answer"
-          },
-          {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": "Let it be"
-          }
-        ]
-      },
-      {
-        "bar": 26,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.816,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 4,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 27,
-        "chord": "G",
-        "lyric": "",
-        "confidence": 0.778,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
         "bar": 28,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.684,
+        "chord": "G",
+        "lyric": "Let it be",
+        "confidence": 0.932,
         "events": [
           {
-            "chord": "C",
+            "chord": "G",
             "beatStart": 1,
             "beatLength": 2,
-            "lyric": ""
+            "lyric": "Let it be"
           },
           {
-            "chord": "Am",
+            "chord": "F",
             "beatStart": 3,
             "beatLength": 2,
-            "lyric": ""
+            "lyric": "let it be"
           }
         ]
       },
       {
         "bar": 29,
+        "chord": "C",
+        "lyric": "Yeah",
+        "confidence": 0.974,
+        "events": [
+          {
+            "chord": "C",
+            "beatStart": 1,
+            "beatLength": 2,
+            "lyric": "Yeah"
+          },
+          {
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
+            "lyric": "there will be an answer"
+          }
+        ]
+      },
+      {
+        "bar": 30,
         "chord": "C/G",
         "lyric": "",
-        "confidence": 0.693,
+        "confidence": 0.877,
         "events": [
           {
             "chord": "C/G",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "Em",
-            "beatStart": 2,
-            "beatLength": 1,
+            "beatLength": 2,
             "lyric": ""
           },
           {
             "chord": "F",
             "beatStart": 3,
             "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 30,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.715,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 4,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 31,
-        "chord": "G",
-        "lyric": "",
-        "confidence": 0.65,
+        "chord": "C",
+        "lyric": "Let it be",
+        "confidence": 1,
         "events": [
           {
-            "chord": "G",
+            "chord": "C",
             "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
+            "beatLength": 4,
+            "lyric": "Let it be"
           }
         ]
       },
       {
         "bar": 32,
-        "chord": "C",
-        "lyric": "",
-        "confidence": 0.299,
+        "chord": "G",
+        "lyric": "Let it be",
+        "confidence": 0.899,
         "events": [
           {
-            "chord": "C",
+            "chord": "G",
             "beatStart": 1,
             "beatLength": 2,
-            "lyric": ""
+            "lyric": "Let it be"
           },
           {
             "chord": "F",
             "beatStart": 3,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": ""
+            "beatLength": 2,
+            "lyric": "let it be"
           }
         ]
       },
       {
         "bar": 33,
         "chord": "C",
-        "lyric": "",
-        "confidence": 0.488,
+        "lyric": "Let it be",
+        "confidence": 0.765,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 2,
-            "beatLength": 1,
-            "lyric": ""
+            "beatLength": 2,
+            "lyric": "Let it be"
           },
           {
             "chord": "G",
             "beatStart": 3,
             "beatLength": 1,
-            "lyric": ""
+            "lyric": "let it be"
           },
           {
             "chord": "F",
@@ -699,14 +651,14 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       {
         "bar": 34,
         "chord": "C",
-        "lyric": "",
-        "confidence": 0.852,
+        "lyric": "Whisper words of wisdom",
+        "confidence": 0.929,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
             "beatLength": 2,
-            "lyric": ""
+            "lyric": "Whisper words of wisdom"
           },
           {
             "chord": "F",
@@ -726,182 +678,152 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         "bar": 35,
         "chord": "C",
         "lyric": "Let it be",
-        "confidence": 0.923,
-        "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": "Let it be"
-          },
-          {
-            "chord": "Gm",
-            "beatStart": 2,
-            "beatLength": 1,
-            "lyric": "let it be"
-          },
-          {
-            "chord": "G",
-            "beatStart": 3,
-            "beatLength": 1,
-            "lyric": "Let it be"
-          },
-          {
-            "chord": "F",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": "let it be"
-          }
-        ]
-      },
-      {
-        "bar": 36,
-        "chord": "C",
-        "lyric": "Yeah",
-        "confidence": 0.961,
+        "confidence": 0.673,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
             "beatLength": 4,
-            "lyric": "Yeah"
+            "lyric": "Let it be"
+          }
+        ]
+      },
+      {
+        "bar": 36,
+        "chord": "G",
+        "lyric": "",
+        "confidence": 0.654,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "Am",
+            "beatStart": 2,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "F",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 37,
-        "chord": "G",
-        "lyric": "there will be an answer",
-        "confidence": 0.802,
+        "chord": "F",
+        "lyric": "",
+        "confidence": 0.642,
         "events": [
           {
-            "chord": "G",
+            "chord": "F",
             "beatStart": 1,
             "beatLength": 2,
-            "lyric": "there will be an answer"
+            "lyric": ""
           },
           {
-            "chord": "Am",
+            "chord": "C",
             "beatStart": 3,
             "beatLength": 2,
-            "lyric": "Let it be"
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 38,
-        "chord": "F",
-        "lyric": "Let it be",
-        "confidence": 0.752,
+        "chord": "G",
+        "lyric": "",
+        "confidence": 0.664,
         "events": [
           {
-            "chord": "F",
+            "chord": "G",
             "beatStart": 1,
-            "beatLength": 3,
-            "lyric": "Let it be"
+            "beatLength": 1,
+            "lyric": ""
           },
           {
-            "chord": "C",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": "let it be"
+            "chord": "F",
+            "beatStart": 2,
+            "beatLength": 3,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 39,
         "chord": "C",
-        "lyric": "Let it be",
-        "confidence": 0.545,
+        "lyric": "",
+        "confidence": 0.799,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": "Let it be"
-          },
-          {
-            "chord": "G",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": "let it be"
-          },
-          {
-            "chord": "F",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": "Whisper words of wisdom"
+            "beatLength": 4,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 40,
-        "chord": "F",
-        "lyric": "Let it be",
-        "confidence": 0.61,
+        "chord": "G",
+        "lyric": "",
+        "confidence": 0.639,
         "events": [
           {
-            "chord": "F",
+            "chord": "G",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": "Let it be"
+            "beatLength": 2,
+            "lyric": ""
           },
           {
-            "chord": "C",
-            "beatStart": 2,
-            "beatLength": 3,
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 41,
-        "chord": "C",
+        "chord": "F",
         "lyric": "",
-        "confidence": 0.892,
+        "confidence": 0.649,
         "events": [
           {
-            "chord": "C",
+            "chord": "F",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "G",
-            "beatStart": 2,
             "beatLength": 2,
             "lyric": ""
           },
           {
-            "chord": "Am",
-            "beatStart": 4,
-            "beatLength": 1,
+            "chord": "C",
+            "beatStart": 3,
+            "beatLength": 2,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 42,
-        "chord": "Am",
+        "chord": "G",
         "lyric": "",
-        "confidence": 0.983,
+        "confidence": 0.605,
         "events": [
           {
-            "chord": "Am",
+            "chord": "G",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 2,
             "beatLength": 2,
             "lyric": ""
           },
           {
-            "chord": "C",
-            "beatStart": 4,
-            "beatLength": 1,
+            "chord": "F",
+            "beatStart": 3,
+            "beatLength": 2,
             "lyric": ""
           }
         ]
@@ -910,94 +832,70 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         "bar": 43,
         "chord": "C",
         "lyric": "",
-        "confidence": 0.994,
+        "confidence": 0.633,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "G",
-            "beatStart": 2,
             "beatLength": 2,
             "lyric": ""
           },
           {
-            "chord": "F",
-            "beatStart": 4,
-            "beatLength": 1,
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 44,
-        "chord": "F",
+        "chord": "G",
         "lyric": "",
-        "confidence": 0.905,
+        "confidence": 0.687,
         "events": [
           {
-            "chord": "F",
+            "chord": "G",
             "beatStart": 1,
             "beatLength": 1,
             "lyric": ""
           },
           {
-            "chord": "C",
+            "chord": "F",
             "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "Am",
-            "beatStart": 4,
-            "beatLength": 1,
+            "beatLength": 3,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 45,
-        "chord": "Am",
+        "chord": "C",
         "lyric": "",
-        "confidence": 0.639,
+        "confidence": 0.725,
         "events": [
           {
-            "chord": "Am",
+            "chord": "C",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "G",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 4,
-            "beatLength": 1,
+            "beatLength": 4,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 46,
-        "chord": "F",
+        "chord": "G",
         "lyric": "",
-        "confidence": 0.797,
+        "confidence": 0.589,
         "events": [
           {
-            "chord": "F",
+            "chord": "G",
             "beatStart": 1,
             "beatLength": 2,
             "lyric": ""
           },
           {
-            "chord": "C",
+            "chord": "F",
             "beatStart": 3,
             "beatLength": 2,
             "lyric": ""
@@ -1008,27 +906,53 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         "bar": 47,
         "chord": "C",
         "lyric": "",
-        "confidence": 0.911,
+        "confidence": 0.577,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 2,
+            "beatLength": 3,
             "lyric": ""
           },
           {
             "chord": "G",
-            "beatStart": 3,
-            "beatLength": 2,
+            "beatStart": 4,
+            "beatLength": 1,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 48,
+        "chord": "G",
+        "lyric": "",
+        "confidence": 0.851,
+        "events": [
+          {
+            "chord": "G",
+            "beatStart": 1,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "Am",
+            "beatStart": 2,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "F",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
+          }
+        ]
+      },
+      {
+        "bar": 49,
         "chord": "F",
         "lyric": "",
-        "confidence": 0.965,
+        "confidence": 0.641,
         "events": [
           {
             "chord": "F",
@@ -1045,33 +969,13 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         ]
       },
       {
-        "bar": 49,
-        "chord": "C",
+        "bar": 50,
+        "chord": "G",
         "lyric": "",
-        "confidence": 0.944,
+        "confidence": 0.621,
         "events": [
-          {
-            "chord": "C",
-            "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
-          },
           {
             "chord": "G",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 50,
-        "chord": "Am",
-        "lyric": "",
-        "confidence": 0.891,
-        "events": [
-          {
-            "chord": "Am",
             "beatStart": 1,
             "beatLength": 2,
             "lyric": ""
@@ -1086,26 +990,14 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       },
       {
         "bar": 51,
-        "chord": "F",
+        "chord": "C",
         "lyric": "",
-        "confidence": 0.593,
+        "confidence": 0.661,
         "events": [
           {
-            "chord": "F",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
             "chord": "C",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "G",
-            "beatStart": 4,
-            "beatLength": 1,
+            "beatStart": 1,
+            "beatLength": 4,
             "lyric": ""
           }
         ]
@@ -1114,44 +1006,38 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         "bar": 52,
         "chord": "G",
         "lyric": "",
-        "confidence": 0.656,
+        "confidence": 0.714,
         "events": [
           {
             "chord": "G",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 2,
             "beatLength": 2,
             "lyric": ""
           },
           {
-            "chord": "C",
-            "beatStart": 4,
-            "beatLength": 1,
+            "chord": "Am",
+            "beatStart": 3,
+            "beatLength": 2,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 53,
-        "chord": "C",
+        "chord": "F",
         "lyric": "",
-        "confidence": 1,
+        "confidence": 0.864,
         "events": [
           {
-            "chord": "C",
+            "chord": "F",
             "beatStart": 1,
-            "beatLength": 3,
+            "beatLength": 1,
             "lyric": ""
           },
           {
-            "chord": "G",
-            "beatStart": 4,
-            "beatLength": 1,
+            "chord": "C",
+            "beatStart": 2,
+            "beatLength": 3,
             "lyric": ""
           }
         ]
@@ -1160,22 +1046,22 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         "bar": 54,
         "chord": "G",
         "lyric": "",
-        "confidence": 0.943,
+        "confidence": 0.579,
         "events": [
           {
             "chord": "G",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "Am",
-            "beatStart": 2,
             "beatLength": 2,
             "lyric": ""
           },
           {
             "chord": "F",
+            "beatStart": 3,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "Dm",
             "beatStart": 4,
             "beatLength": 1,
             "lyric": ""
@@ -1184,41 +1070,35 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       },
       {
         "bar": 55,
-        "chord": "F",
-        "lyric": "Let it be",
-        "confidence": 0.787,
+        "chord": "C",
+        "lyric": "",
+        "confidence": 0.682,
         "events": [
           {
-            "chord": "F",
+            "chord": "C",
             "beatStart": 1,
             "beatLength": 1,
-            "lyric": "Let it be"
+            "lyric": ""
           },
           {
-            "chord": "C",
+            "chord": "Am",
             "beatStart": 2,
-            "beatLength": 2,
-            "lyric": "let it be"
-          },
-          {
-            "chord": "G",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": "Let it be"
+            "beatLength": 3,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 56,
         "chord": "G",
-        "lyric": "yeah",
-        "confidence": 0.727,
+        "lyric": "Let it be",
+        "confidence": 0.769,
         "events": [
           {
             "chord": "G",
             "beatStart": 1,
             "beatLength": 1,
-            "lyric": "yeah"
+            "lyric": "Let it be"
           },
           {
             "chord": "F",
@@ -1230,33 +1110,27 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
             "chord": "C",
             "beatStart": 4,
             "beatLength": 1,
-            "lyric": "Whisper words of wisdom"
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 57,
         "chord": "C",
-        "lyric": "Let it be",
-        "confidence": 0.701,
+        "lyric": "Let it be, yeah",
+        "confidence": 0.862,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 1,
-            "lyric": "Let it be"
-          },
-          {
-            "chord": "Am",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
+            "beatLength": 3,
+            "lyric": "Let it be, yeah"
           },
           {
             "chord": "G",
             "beatStart": 4,
             "beatLength": 1,
-            "lyric": ""
+            "lyric": "let it be"
           }
         ]
       },
@@ -1264,7 +1138,7 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
         "bar": 58,
         "chord": "G",
         "lyric": "",
-        "confidence": 0.709,
+        "confidence": 0.965,
         "events": [
           {
             "chord": "G",
@@ -1275,7 +1149,13 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
           {
             "chord": "F",
             "beatStart": 2,
-            "beatLength": 3,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "C",
+            "beatStart": 4,
+            "beatLength": 1,
             "lyric": ""
           }
         ]
@@ -1283,13 +1163,25 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       {
         "bar": 59,
         "chord": "C",
-        "lyric": "",
-        "confidence": 0.883,
+        "lyric": "Whisper words of wisdom",
+        "confidence": 0.979,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 4,
+            "beatLength": 1,
+            "lyric": "Whisper words of wisdom"
+          },
+          {
+            "chord": "Am",
+            "beatStart": 2,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "C/G",
+            "beatStart": 4,
+            "beatLength": 1,
             "lyric": ""
           }
         ]
@@ -1297,19 +1189,25 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       {
         "bar": 60,
         "chord": "G",
-        "lyric": "",
-        "confidence": 0.875,
+        "lyric": "Let it be",
+        "confidence": 0.98,
         "events": [
           {
             "chord": "G",
             "beatStart": 1,
+            "beatLength": 1,
+            "lyric": "Let it be"
+          },
+          {
+            "chord": "F",
+            "beatStart": 2,
             "beatLength": 2,
             "lyric": ""
           },
           {
-            "chord": "F",
-            "beatStart": 3,
-            "beatLength": 2,
+            "chord": "C",
+            "beatStart": 4,
+            "beatLength": 1,
             "lyric": ""
           }
         ]
@@ -1317,123 +1215,141 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       {
         "bar": 61,
         "chord": "C",
-        "lyric": "",
-        "confidence": 0.947,
+        "lyric": "And when the night is cloudy",
+        "confidence": 0.893,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 2,
-            "lyric": ""
+            "beatLength": 3,
+            "lyric": "And when the night is cloudy"
           },
           {
-            "chord": "Am",
-            "beatStart": 3,
-            "beatLength": 2,
+            "chord": "G",
+            "beatStart": 4,
+            "beatLength": 1,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 62,
-        "chord": "C/G",
-        "lyric": "And when the night is cloudy",
-        "confidence": 0.989,
+        "chord": "G",
+        "lyric": "There is still a light that shines on me",
+        "confidence": 0.992,
         "events": [
           {
-            "chord": "C/G",
+            "chord": "G",
             "beatStart": 1,
-            "beatLength": 2,
-            "lyric": "And when the night is cloudy"
+            "beatLength": 1,
+            "lyric": "There is still a light that shines on me"
           },
           {
             "chord": "F",
-            "beatStart": 3,
+            "beatStart": 2,
             "beatLength": 2,
-            "lyric": "There is still a light that shines on me"
+            "lyric": ""
+          },
+          {
+            "chord": "C",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 63,
         "chord": "C",
-        "lyric": "Shine until tomorrow",
-        "confidence": 0.968,
+        "lyric": "",
+        "confidence": 0.949,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
-            "beatLength": 4,
-            "lyric": "Shine until tomorrow"
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "Am",
+            "beatStart": 2,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "C/G",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 64,
-        "chord": "G",
-        "lyric": "Let it be",
-        "confidence": 0.611,
+        "chord": "C/G",
+        "lyric": "Shine until tomorrow",
+        "confidence": 0.973,
         "events": [
           {
-            "chord": "G",
+            "chord": "C/G",
             "beatStart": 1,
-            "beatLength": 2,
-            "lyric": "Let it be"
+            "beatLength": 1,
+            "lyric": "Shine until tomorrow"
           },
           {
             "chord": "F",
-            "beatStart": 3,
+            "beatStart": 2,
             "beatLength": 2,
-            "lyric": "I wake up to the sound of music"
+            "lyric": ""
+          },
+          {
+            "chord": "C",
+            "beatStart": 4,
+            "beatLength": 1,
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 65,
         "chord": "C",
-        "lyric": "Mother Mary comes to me",
-        "confidence": 0.77,
+        "lyric": "Let it be",
+        "confidence": 1,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
             "beatLength": 3,
-            "lyric": "Mother Mary comes to me"
+            "lyric": "Let it be"
           },
           {
-            "chord": "Am",
+            "chord": "G",
             "beatStart": 4,
             "beatLength": 1,
-            "lyric": "Speaking words of wisdom"
+            "lyric": ""
           }
         ]
       },
       {
         "bar": 66,
-        "chord": "Am",
-        "lyric": "Let it be",
-        "confidence": 0.671,
+        "chord": "G",
+        "lyric": "I wake up to the sound of music",
+        "confidence": 0.937,
         "events": [
           {
-            "chord": "Am",
+            "chord": "G",
             "beatStart": 1,
             "beatLength": 1,
-            "lyric": "Let it be"
-          },
-          {
-            "chord": "C/G",
-            "beatStart": 2,
-            "beatLength": 1,
-            "lyric": "yeah"
-          },
-          {
-            "chord": "G",
-            "beatStart": 3,
-            "beatLength": 1,
-            "lyric": ""
+            "lyric": "I wake up to the sound of music"
           },
           {
             "chord": "F",
+            "beatStart": 2,
+            "beatLength": 2,
+            "lyric": ""
+          },
+          {
+            "chord": "C",
             "beatStart": 4,
             "beatLength": 1,
             "lyric": ""
@@ -1442,32 +1358,44 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       },
       {
         "bar": 67,
-        "chord": "F",
-        "lyric": "",
-        "confidence": 0.857,
+        "chord": "C",
+        "lyric": "Mother Mary comes to me",
+        "confidence": 0.948,
         "events": [
           {
-            "chord": "F",
+            "chord": "C",
             "beatStart": 1,
+            "beatLength": 1,
+            "lyric": "Mother Mary comes to me"
+          },
+          {
+            "chord": "F",
+            "beatStart": 2,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "Em",
+            "beatStart": 3,
             "beatLength": 1,
             "lyric": ""
           },
           {
             "chord": "C",
-            "beatStart": 2,
-            "beatLength": 3,
+            "beatStart": 4,
+            "beatLength": 1,
             "lyric": ""
           }
         ]
       },
       {
         "bar": 68,
-        "chord": "C",
+        "chord": "Bb",
         "lyric": "",
-        "confidence": 0.959,
+        "confidence": 0.555,
         "events": [
           {
-            "chord": "C",
+            "chord": "Bb",
             "beatStart": 1,
             "beatLength": 1,
             "lyric": ""
@@ -1475,11 +1403,17 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
           {
             "chord": "G",
             "beatStart": 2,
-            "beatLength": 2,
+            "beatLength": 1,
             "lyric": ""
           },
           {
             "chord": "F",
+            "beatStart": 3,
+            "beatLength": 1,
+            "lyric": ""
+          },
+          {
+            "chord": "C",
             "beatStart": 4,
             "beatLength": 1,
             "lyric": ""
@@ -1488,113 +1422,29 @@ window.PIANO_TRAINER_SONG_DRAFTS = {
       },
       {
         "bar": 69,
-        "chord": "F",
-        "lyric": "",
-        "confidence": 0.801,
-        "events": [
-          {
-            "chord": "F",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 2,
-            "beatLength": 2,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 70,
-        "chord": "Em",
-        "lyric": "",
-        "confidence": 0.263,
-        "events": [
-          {
-            "chord": "Em",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "Dm",
-            "beatStart": 2,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 3,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "Am",
-            "beatStart": 4,
-            "beatLength": 1,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 71,
-        "chord": "G",
-        "lyric": "",
-        "confidence": 0.948,
-        "events": [
-          {
-            "chord": "G",
-            "beatStart": 1,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "F",
-            "beatStart": 2,
-            "beatLength": 1,
-            "lyric": ""
-          },
-          {
-            "chord": "C",
-            "beatStart": 3,
-            "beatLength": 2,
-            "lyric": ""
-          }
-        ]
-      },
-      {
-        "bar": 72,
         "chord": "C",
-        "lyric": "",
+        "lyric": "Speaking words of wisdom",
         "confidence": 1,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
             "beatLength": 4,
-            "lyric": ""
+            "lyric": "Speaking words of wisdom"
           }
         ]
       },
       {
-        "bar": 73,
+        "bar": 70,
         "chord": "C",
-        "lyric": "",
+        "lyric": "Let it be, yeah",
         "confidence": 0.5,
         "events": [
           {
             "chord": "C",
             "beatStart": 1,
             "beatLength": 4,
-            "lyric": ""
+            "lyric": "Let it be, yeah"
           }
         ]
       }

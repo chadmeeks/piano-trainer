@@ -17,7 +17,16 @@ Top-level shape:
   "practiceHistory": {},
   "selectedHistoryDateKey": null,
   "songTimingOverrides": {},
-  "songSectionOverrides": {}
+  "songSectionOverrides": {},
+  "songArrangementOverrides": {},
+  "songSourceChoice": {},
+  "songVideoChoice": {},
+  "songArrangementVersions": {},
+  "songVersionSelectionBySong": {},
+  "adminSongPrep": {},
+  "adminSongKeyFilter": "all",
+  "adminSelectedSongId": "",
+  "songCalibrationStride": 1
 }
 ```
 
@@ -60,9 +69,11 @@ Top-level shape:
   - Last selected day on History screen.
 
 - `songTimingOverrides` object
-  - Keyed by song exercise id.
+  - Keyed by song exercise id and source-scoped id (`exerciseId::sourceId`).
   - Shape:
     - `barStarts`: array of numeric seconds (bar start timestamps)
+    - `anchors`: map of `barIndex -> timeSec`
+    - `stride`: tap stride used during calibration (`1|2|4|8`)
 
 - `songSectionOverrides` object
   - Keyed by song exercise id.
@@ -70,6 +81,48 @@ Top-level shape:
     - `sections`: object keyed by section name
       - `keySignature` string
       - `timeSignature` string
+
+- `songArrangementOverrides` object
+  - Keyed by song exercise id.
+  - Shape:
+    - `measures`: edited measure array (chord events, lyric/event text, timing)
+
+- `songSourceChoice` object
+  - Keyed by song id.
+  - Selected base source id (for example `let-it-be-hybrid-v2`).
+
+- `songVideoChoice` object
+  - Keyed by song id.
+  - Selected YouTube video id.
+
+- `songArrangementVersions` object
+  - Keyed by song id.
+  - Shape:
+    - `versions`: array of saved arrangement snapshots
+    - `finalVersionId`: selected final version id for playback flow
+
+- `songVersionSelectionBySong` object
+  - Keyed by song id.
+  - Currently selected version id in arrange workflow UI.
+
+- `adminSongPrep` object
+  - Keyed by song id.
+  - Shape:
+    - `lyricsText`
+    - `lyricsFileName`
+    - `lyricsValid`
+    - `lyricsMessage`
+    - `videoSelected`
+    - `autoDraftReady`
+
+- `adminSongKeyFilter` string
+  - Admin song-list key filter value.
+
+- `adminSelectedSongId` string
+  - Last selected admin song.
+
+- `songCalibrationStride` number
+  - Last selected tap stride for timing capture.
 
 ## Notes
 

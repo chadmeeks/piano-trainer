@@ -8,6 +8,8 @@ const screens = {
 };
 
 const STORAGE_KEY = "pianoTrainerV2";
+const LET_IT_BE_RESET_TOKEN_KEY = `${STORAGE_KEY}:letItBeResetToken`;
+const LET_IT_BE_RESET_TOKEN_VALUE = "2026-03-12-reset-let-it-be-v4";
 
 const MODULES = [
   { id: "scales", title: "Scales" },
@@ -89,6 +91,9 @@ const state = {
   songArrangementOverrides: {},
   songSourceChoice: {},
   songVideoChoice: {},
+  songArrangementVersions: {},
+  songVersionSelectionBySong: {},
+  adminSongPrep: {},
   adminSongKeyFilter: "all",
   adminSelectedSongId: "",
   songCalibrationStride: 1,
@@ -116,7 +121,8 @@ const songPlayback = {
 const adminAutoDraft = {
   pollIntervalId: null,
   status: null,
-  lastAppliedEndedAt: ""
+  lastAppliedEndedAt: "",
+  targetSongId: ""
 };
 
 function build88KeyNoteRange() {
@@ -181,10 +187,39 @@ function loadState() {
     state.songVideoChoice = parsed.songVideoChoice && typeof parsed.songVideoChoice === "object"
       ? parsed.songVideoChoice
       : {};
+    state.songArrangementVersions = parsed.songArrangementVersions && typeof parsed.songArrangementVersions === "object"
+      ? parsed.songArrangementVersions
+      : {};
+    state.songVersionSelectionBySong = parsed.songVersionSelectionBySong && typeof parsed.songVersionSelectionBySong === "object"
+      ? parsed.songVersionSelectionBySong
+      : {};
+    state.adminSongPrep = parsed.adminSongPrep && typeof parsed.adminSongPrep === "object"
+      ? parsed.adminSongPrep
+      : {};
     state.adminSongKeyFilter = typeof parsed.adminSongKeyFilter === "string" ? parsed.adminSongKeyFilter : "all";
     state.adminSelectedSongId = typeof parsed.adminSelectedSongId === "string" ? parsed.adminSelectedSongId : "";
     const parsedStride = Number(parsed.songCalibrationStride || 1);
     state.songCalibrationStride = [1, 2, 4, 8].includes(parsedStride) ? parsedStride : 1;
+
+    const shouldResetLetItBe = localStorage.getItem(LET_IT_BE_RESET_TOKEN_KEY) !== LET_IT_BE_RESET_TOKEN_VALUE;
+    if (shouldResetLetItBe) {
+      const isLetItBeExerciseKey = (key) => String(key || "").includes("-song-let-it-be");
+      for (const key of Object.keys(state.songArrangementOverrides || {})) {
+        if (isLetItBeExerciseKey(key)) delete state.songArrangementOverrides[key];
+      }
+      for (const key of Object.keys(state.songSectionOverrides || {})) {
+        if (isLetItBeExerciseKey(key)) delete state.songSectionOverrides[key];
+      }
+      for (const key of Object.keys(state.songTimingOverrides || {})) {
+        if (isLetItBeExerciseKey(key)) delete state.songTimingOverrides[key];
+      }
+      delete state.songSourceChoice["let-it-be"];
+      delete state.songVideoChoice["let-it-be"];
+      delete state.songArrangementVersions["let-it-be"];
+      delete state.songVersionSelectionBySong["let-it-be"];
+      delete state.adminSongPrep["let-it-be"];
+      localStorage.setItem(LET_IT_BE_RESET_TOKEN_KEY, LET_IT_BE_RESET_TOKEN_VALUE);
+    }
 
     for (const keyName of CIRCLE_KEYS) {
       const src = parsed.keyProgress?.[keyName] || {};
@@ -217,6 +252,9 @@ function saveState() {
       songArrangementOverrides: state.songArrangementOverrides,
       songSourceChoice: state.songSourceChoice,
       songVideoChoice: state.songVideoChoice,
+      songArrangementVersions: state.songArrangementVersions,
+      songVersionSelectionBySong: state.songVersionSelectionBySong,
+      adminSongPrep: state.adminSongPrep,
       adminSongKeyFilter: state.adminSongKeyFilter,
       adminSelectedSongId: state.adminSelectedSongId,
       songCalibrationStride: state.songCalibrationStride
@@ -627,8 +665,105 @@ function librarySongSpecForKey(keyName, songId) {
 }
 
 function selectedSongSourceChoice(songId) {
-  if (!songId) return "default";
-  return String(state.songSourceChoice?.[songId] || "default");
+  if (!songId) return "";
+  return String(state.songSourceChoice?.[songId] || "");
+}
+
+function deepClone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function songArrangementVersionBucket(songId) {
+  const raw = state.songArrangementVersions?.[songId];
+  if (!raw || typeof raw !== "object") {
+    return {
+      versions: [],
+      finalVersionId: ""
+    };
+  }
+  const versions = Array.isArray(raw.versions)
+    ? raw.versions.filter((row) => row && typeof row === "object" && typeof row.id === "string")
+    : [];
+  return {
+    versions,
+    finalVersionId: typeof raw.finalVersionId === "string" ? raw.finalVersionId : ""
+  };
+}
+
+function saveSongArrangementVersionBucket(songId, bucket) {
+  if (!songId) return;
+  state.songArrangementVersions[songId] = {
+    versions: Array.isArray(bucket?.versions) ? bucket.versions : [],
+    finalVersionId: typeof bucket?.finalVersionId === "string" ? bucket.finalVersionId : ""
+  };
+  saveState();
+}
+
+function selectedSongArrangementVersionId(songId) {
+  if (!songId) return "";
+  return String(state.songVersionSelectionBySong?.[songId] || "");
+}
+
+function setSelectedSongArrangementVersionId(songId, versionId) {
+  if (!songId) return;
+  state.songVersionSelectionBySong[songId] = String(versionId || "");
+  saveState();
+}
+
+function buildArrangementVersionSnapshot(exercise) {
+  if (!exercise?.id || !exercise?.songData?.id) return null;
+  const exerciseId = exercise.id;
+  const songId = exercise.songData.id;
+  const sourceChoice = String(state.songSourceChoice?.[songId] || "");
+  const timingByKey = {};
+  for (const [key, value] of Object.entries(state.songTimingOverrides || {})) {
+    if (key === exerciseId || key.startsWith(`${exerciseId}::`)) {
+      timingByKey[key] = deepClone(value);
+    }
+  }
+  return {
+    sourceChoice,
+    arrangementOverride: deepClone(state.songArrangementOverrides?.[exerciseId] || null),
+    sectionOverride: deepClone(state.songSectionOverrides?.[exerciseId] || null),
+    timingOverrides: timingByKey
+  };
+}
+
+function applyArrangementVersionSnapshot(exercise, snapshot) {
+  if (!exercise?.id || !exercise?.songData?.id || !snapshot || typeof snapshot !== "object") return false;
+  const exerciseId = exercise.id;
+  const songId = exercise.songData.id;
+  if (typeof snapshot.sourceChoice === "string" && snapshot.sourceChoice) {
+    state.songSourceChoice[songId] = snapshot.sourceChoice;
+  }
+  if (snapshot.arrangementOverride && typeof snapshot.arrangementOverride === "object") {
+    state.songArrangementOverrides[exerciseId] = deepClone(snapshot.arrangementOverride);
+  } else {
+    delete state.songArrangementOverrides[exerciseId];
+  }
+  if (snapshot.sectionOverride && typeof snapshot.sectionOverride === "object") {
+    state.songSectionOverrides[exerciseId] = deepClone(snapshot.sectionOverride);
+  } else {
+    delete state.songSectionOverrides[exerciseId];
+  }
+  Object.keys(state.songTimingOverrides || {}).forEach((key) => {
+    if (key === exerciseId || key.startsWith(`${exerciseId}::`)) {
+      delete state.songTimingOverrides[key];
+    }
+  });
+  if (snapshot.timingOverrides && typeof snapshot.timingOverrides === "object") {
+    Object.entries(snapshot.timingOverrides).forEach(([key, value]) => {
+      if (key === exerciseId || key.startsWith(`${exerciseId}::`)) {
+        state.songTimingOverrides[key] = deepClone(value);
+      }
+    });
+  }
+  saveState();
+  return true;
+}
+
+function createArrangementVersionId() {
+  return `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 function romanForChordInC(chordSymbol) {
@@ -794,11 +929,37 @@ function buildSongDataFromSpec(spec) {
 
 function buildLetItBeSongData() {
   const sourceSpec = librarySongSpecForKey("C", "let-it-be");
+  const prep = adminPrepForSong("let-it-be");
+  const isInitialized = Boolean(prep?.autoDraftReady);
+  if (!isInitialized) {
+    const base = buildSongDataFromSpec(sourceSpec);
+    if (base) {
+      return {
+        ...base,
+        youtubeId: "",
+        chartStartSec: 0,
+        arrangementSource: {
+          id: "not-initialized",
+          label: "Setup Required",
+          type: "pending",
+          verified: false
+        },
+        sourceVariants: [],
+        formSections: [],
+        measures: [],
+        hint: "Song setup not complete. Go to Admin, upload lyrics, choose video, and run Auto Draft."
+      };
+    }
+  }
   const fromSpec = buildSongDataFromSpec(sourceSpec);
   if (fromSpec) {
     const chosenRaw = selectedSongSourceChoice("let-it-be");
-    const validIds = new Set((fromSpec.sourceVariants || []).map((row) => String(row.id || "default")));
-    const chosen = validIds.has(chosenRaw) ? chosenRaw : "default";
+    const variantIds = (fromSpec.sourceVariants || []).map((row) => String(row?.id || "default"));
+    const validIds = new Set(variantIds);
+    const preferredFallback = variantIds.includes("default")
+      ? "default"
+      : (variantIds[0] || "default");
+    const chosen = validIds.has(chosenRaw) && chosenRaw ? chosenRaw : preferredFallback;
     if (chosen && chosen !== "default") {
       return overlaySongWithDraftChords(fromSpec, chosen);
     }
@@ -1303,14 +1464,29 @@ function buildCurriculumForKey(keyName) {
 
   const songs = songRows.map((song, index) => {
     const exerciseId = `${keyName}-song-${song.id || index + 1}`;
-    const arrangedSong = applyArrangementOverrideToSongData(song, state.songArrangementOverrides?.[exerciseId]);
+    const songId = String(song?.id || "");
+    const bucket = songArrangementVersionBucket(songId);
+    const finalVersion = bucket.finalVersionId
+      ? bucket.versions.find((row) => row.id === bucket.finalVersionId)
+      : null;
+    const useFinalVersion = !state.songArrangeAccess && finalVersion?.snapshot;
+    const arrangementOverride = useFinalVersion
+      ? finalVersion.snapshot.arrangementOverride
+      : state.songArrangementOverrides?.[exerciseId];
+    const sectionOverride = useFinalVersion
+      ? finalVersion.snapshot.sectionOverride
+      : state.songSectionOverrides?.[exerciseId];
+    const arrangedSong = applyArrangementOverrideToSongData(song, arrangementOverride);
     const sourceId = String(arrangedSong?.arrangementSource?.id || "default");
     const scopedTimingKey = `${exerciseId}::${sourceId}`;
-    const timingOverride = state.songTimingOverrides?.[scopedTimingKey]
-      || (sourceId === "default" ? state.songTimingOverrides?.[exerciseId] : null)
+    const timingSource = useFinalVersion && finalVersion?.snapshot?.timingOverrides && typeof finalVersion.snapshot.timingOverrides === "object"
+      ? finalVersion.snapshot.timingOverrides
+      : state.songTimingOverrides;
+    const timingOverride = timingSource?.[scopedTimingKey]
+      || (sourceId === "default" ? timingSource?.[exerciseId] : null)
       || null;
     const timedSong = applyTimingOverrideToSongData(arrangedSong, timingOverride);
-    const configuredSong = applySectionOverrideToSongData(timedSong, state.songSectionOverrides?.[exerciseId]);
+    const configuredSong = applySectionOverrideToSongData(timedSong, sectionOverride);
     return {
       id: exerciseId,
     moduleId: "songs",
@@ -1319,10 +1495,10 @@ function buildCurriculumForKey(keyName) {
     hint: configuredSong.hint || "Loop short sections and focus on smooth changes.",
     notes: Array.isArray(configuredSong.measures?.[0]?.notes)
       ? configuredSong.measures[0].notes
-      : [0, 7, 9, 5, 12, 7, 9, 5].map((n) => midiToNoteName(root3 + n)),
+      : [],
     fingering: Array.isArray(configuredSong.measures?.[0]?.fingering)
       ? configuredSong.measures[0].fingering
-      : [1, 1, 1, 1, 1, 1, 1, 1],
+      : [],
     handAssignments: Array.isArray(configuredSong.measures?.[0]?.handAssignments) ? configuredSong.measures[0].handAssignments : null,
     rootNotes: Array.isArray(configuredSong.measures?.[0]?.rootNotes) ? configuredSong.measures[0].rootNotes : null,
     rootHands: Array.isArray(configuredSong.measures?.[0]?.rootHands) ? configuredSong.measures[0].rootHands : null,
@@ -1639,6 +1815,97 @@ function allAdminSongSpecs() {
   return rows;
 }
 
+function lyricsFormatExampleText() {
+  return [
+    "[Intro]",
+    "(instrumental)",
+    "",
+    "[Verse 1]",
+    "When I find myself in times of trouble",
+    "Mother Mary comes to me",
+    "Speaking words of wisdom, let it be",
+    "",
+    "[Chorus]",
+    "Let it be, let it be, let it be, let it be",
+    "Whisper words of wisdom, let it be"
+  ].join("\n");
+}
+
+function parseLyricsSectionsText(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const sections = [];
+  let current = null;
+  let lyricLines = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i];
+    const line = String(raw || "").trim();
+    if (!line) continue;
+    const header = line.match(/^\[([^\]]+)\]$/);
+    if (header) {
+      current = {
+        name: header[1].trim(),
+        lineCount: 0
+      };
+      sections.push(current);
+      continue;
+    }
+    if (!current) {
+      return {
+        valid: false,
+        message: `Invalid format at line ${i + 1}: lyric text must appear under a [Section Header].`,
+        sections: [],
+        lyricLines: 0
+      };
+    }
+    current.lineCount += 1;
+    lyricLines += 1;
+  }
+  if (!sections.length) {
+    return { valid: false, message: "Invalid format: add at least one [Section Header].", sections: [], lyricLines: 0 };
+  }
+  if (lyricLines < 1) {
+    return { valid: false, message: "Invalid format: add at least one lyric line under a section.", sections, lyricLines };
+  }
+  return {
+    valid: true,
+    message: `Valid lyrics file · ${sections.length} sections · ${lyricLines} lyric lines`,
+    sections,
+    lyricLines
+  };
+}
+
+function adminPrepForSong(songId) {
+  const row = state.adminSongPrep?.[songId];
+  if (!row || typeof row !== "object") {
+    return {
+      lyricsText: "",
+      lyricsFileName: "",
+      lyricsValid: false,
+      lyricsMessage: "Upload a lyrics/sections file to begin.",
+      videoSelected: false,
+      autoDraftReady: false
+    };
+  }
+  return {
+    lyricsText: typeof row.lyricsText === "string" ? row.lyricsText : "",
+    lyricsFileName: typeof row.lyricsFileName === "string" ? row.lyricsFileName : "",
+    lyricsValid: row.lyricsValid === true,
+    lyricsMessage: typeof row.lyricsMessage === "string" ? row.lyricsMessage : "",
+    videoSelected: row.videoSelected === true,
+    autoDraftReady: row.autoDraftReady === true
+  };
+}
+
+function saveAdminPrepForSong(songId, patch) {
+  if (!songId) return;
+  const current = adminPrepForSong(songId);
+  state.adminSongPrep[songId] = {
+    ...current,
+    ...(patch && typeof patch === "object" ? patch : {})
+  };
+  saveState();
+}
+
 function renderAdmin() {
   const keySelect = document.getElementById("adminSongKeyFilter");
   const listEl = document.getElementById("adminSongList");
@@ -1678,20 +1945,65 @@ function renderAdmin() {
     </article>
   `).join("");
 
-  const picked = filtered.find((row) => row.song.id === state.adminSelectedSongId) || filtered[0];
-  const selectedSong = picked.song;
-  const selectedVideo = String(state.songVideoChoice[selectedSong.id] || selectedSong.youtubeId || "");
-  const videos = Array.isArray(selectedSong.youtubeCandidates) ? [...selectedSong.youtubeCandidates] : [];
-  videos.sort((a, b) => Number(b.viewCount || 0) - Number(a.viewCount || 0));
+  try {
+    const picked = filtered.find((row) => row?.song?.id === state.adminSelectedSongId) || filtered[0];
+    const selectedSong = picked?.song;
+    if (!selectedSong || typeof selectedSong !== "object" || !selectedSong.id) {
+      detailEl.innerHTML = "<p class='muted'>Could not resolve selected song. Try selecting the song again.</p>";
+      return;
+    }
+    const pickedKeyName = typeof picked?.keyName === "string" ? picked.keyName : "C";
+    const selectedVideo = String(state.songVideoChoice?.[selectedSong.id] || selectedSong.youtubeId || "");
+    const prep = adminPrepForSong(selectedSong.id);
+    const hasValidLyrics = prep.lyricsValid && Boolean(prep.lyricsText.trim());
+    const hasSelectedVideo = prep.videoSelected && Boolean(selectedVideo);
+    const hasAutoDraft = prep.autoDraftReady;
+    const canRunAutoDraft = hasValidLyrics && hasSelectedVideo && !(adminAutoDraft.status?.running);
+    const canOpenArrangement = hasValidLyrics && hasSelectedVideo && hasAutoDraft;
+    const runningForSong = Boolean(
+      adminAutoDraft.status?.running
+      && (adminAutoDraft.targetSongId || state.adminSelectedSongId || "let-it-be") === selectedSong.id
+    );
+    const sourceLabel = hasAutoDraft
+      ? "Auto Generated Draft"
+      : (runningForSong ? "Auto Draft in progress" : "Not initialized");
+    const videos = Array.isArray(selectedSong.youtubeCandidates)
+      ? selectedSong.youtubeCandidates
+        .filter((row) => row && typeof row === "object")
+        .map((row) => ({
+          videoId: typeof row.videoId === "string" ? row.videoId : "",
+          title: typeof row.title === "string" && row.title.trim() ? row.title : "Untitled video",
+          channel: typeof row.channel === "string" && row.channel.trim() ? row.channel : "Unknown channel",
+          viewCount: Number.isFinite(Number(row.viewCount)) ? Number(row.viewCount) : 0
+        }))
+        .filter((row) => row.videoId)
+      : [];
+    videos.sort((a, b) => Number(b.viewCount || 0) - Number(a.viewCount || 0));
 
-  detailEl.innerHTML = `
+    detailEl.innerHTML = `
     <h3 class="admin-song-title">${selectedSong.title} · ${selectedSong.artist || "Unknown artist"}</h3>
-    <p class="song-meta-line">Key: ${selectedSong.songKey || picked.keyName} · Time Signature: ${selectedSong.timeSignature || "n/a"}</p>
-    <p class="song-meta-line">Source: ${selectedSong.arrangementSource?.label || "n/a"}</p>
+    <p class="song-meta-line">Key: ${selectedSong.songKey || pickedKeyName} · Time Signature: ${selectedSong.timeSignature || "n/a"}</p>
+    <p class="song-meta-line">Source: ${sourceLabel}</p>
+    <div class="admin-prep-checklist">
+      <p class="admin-prep-item ${hasValidLyrics ? "ok" : ""}">1. Upload valid lyrics/sections file</p>
+      <p class="admin-prep-item ${hasSelectedVideo ? "ok" : ""}">2. Select YouTube source video</p>
+      <p class="admin-prep-item ${hasAutoDraft ? "ok" : ""}">3. Run Auto Draft</p>
+    </div>
+    <div class="admin-lyrics-upload">
+      <p class="label">Lyrics File Format</p>
+      <p class="admin-lyrics-instruction">Use section headers in brackets (for example: <code>[Verse 1]</code>) and put lyric lines under each section.</p>
+      <details class="admin-lyrics-example">
+        <summary>Show Example</summary>
+        <pre>${lyricsFormatExampleText()}</pre>
+      </details>
+      <label class="admin-lyrics-file-label" for="adminLyricsFileInput">Upload <code>.txt</code> lyrics file</label>
+      <input id="adminLyricsFileInput" type="file" accept=".txt,text/plain" data-song-id="${selectedSong.id}" />
+      <p class="admin-lyrics-status ${hasValidLyrics ? "ok" : "bad"}">${prep.lyricsMessage || "Upload a lyrics/sections file to begin."}</p>
+      ${prep.lyricsFileName ? `<p class="admin-lyrics-file-name">Loaded file: ${prep.lyricsFileName}</p>` : ""}
+    </div>
     <div class="song-arrangement-controls">
-      <button id="adminRunAutoDraftNowBtn" class="btn filled">Run Auto-draft Now</button>
-      <button id="adminAutoArrangeBtn" class="btn tonal">Auto-arrange</button>
-      <button id="adminOpenArrangementBtn" class="btn outlined">Open Arrangement Page</button>
+      <button id="adminRunAutoDraftNowBtn" class="btn filled" ${canRunAutoDraft ? "" : "disabled"}>Run Auto Draft</button>
+      <button id="adminOpenArrangementBtn" class="btn outlined" ${canOpenArrangement ? "" : "disabled"}>Open Arrangement Page</button>
     </div>
     <div id="adminAutoDraftStatusPanel" class="admin-autodraft-panel"></div>
     <div>
@@ -1699,17 +2011,49 @@ function renderAdmin() {
       <div class="admin-video-list">
         ${videos.map((row) => `
           <article class="admin-video-item ${selectedVideo === row.videoId ? "active" : ""}">
-            <strong>${row.title}</strong>
-            <p class="admin-video-meta">${row.channel || "Unknown channel"} · ${(Number(row.viewCount || 0)).toLocaleString()} views</p>
+            <div class="admin-video-top">
+              <div class="admin-video-copy">
+                <strong>${row.title}</strong>
+                <p class="admin-video-meta">${row.channel} · ${row.viewCount.toLocaleString()} views</p>
+              </div>
+              <img
+                class="admin-video-thumb"
+                src="https://img.youtube.com/vi/${row.videoId}/mqdefault.jpg"
+                alt="Thumbnail for ${row.title}"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+              />
+            </div>
+            <details class="admin-video-preview">
+              <summary>Play Preview</summary>
+              <div class="admin-video-preview-frame">
+                <iframe
+                  src="https://www.youtube.com/embed/${row.videoId}?rel=0&playsinline=1"
+                  title="Preview: ${row.title}"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen
+                ></iframe>
+              </div>
+            </details>
             <div class="row gap">
               <button class="btn outlined" data-action="admin-choose-video" data-video-id="${row.videoId}" data-song-id="${selectedSong.id}">Use This Video</button>
             </div>
           </article>
-        `).join("")}
+        `).join("") || "<p class='muted'>No candidate videos available for this song.</p>"}
       </div>
     </div>
   `;
-  renderAdminAutoDraftStatus();
+    renderAdminAutoDraftStatus();
+  } catch (error) {
+    const detail = error && typeof error.message === "string" ? error.message : "Unknown error";
+    detailEl.innerHTML = `
+      <p class='muted'>Could not render admin workspace. Refresh and try again.</p>
+      <p class='muted'><code>${detail.replace(/[<>&]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch] || ch))}</code></p>
+    `;
+    showToast("Admin workspace render issue.");
+    console.error("renderAdmin detail failure", error);
+  }
 }
 
 function adminAutoDraftFallbackStatus() {
@@ -1722,7 +2066,9 @@ function adminAutoDraftFallbackStatus() {
     steps: [
       { id: "prepare_audio", label: "Prepare audio input", status: "pending" },
       { id: "build_harmony", label: "Build harmony-focused stem", status: "pending" },
-      { id: "analyze", label: "Analyze beats/chords/lyrics", status: "pending" },
+      { id: "analyze_beats", label: "Analyze beat grid", status: "pending" },
+      { id: "build_chords", label: "Build chord events", status: "pending" },
+      { id: "align_sections", label: "Align sections and lyrics", status: "pending" },
       { id: "publish", label: "Publish draft to app", status: "pending" },
       { id: "complete", label: "Finalize", status: "pending" }
     ]
@@ -1741,9 +2087,24 @@ function renderAdminAutoDraftStatus() {
   const panel = document.getElementById("adminAutoDraftStatusPanel");
   if (!panel) return;
   const status = adminAutoDraft.status || adminAutoDraftFallbackStatus();
-  const steps = Array.isArray(status.steps) && status.steps.length ? status.steps : adminAutoDraftFallbackStatus().steps;
+  const rawSteps = Array.isArray(status.steps) && status.steps.length ? status.steps : adminAutoDraftFallbackStatus().steps;
+  const steps = rawSteps
+    .map((step, idx) => {
+      const safeLabel = typeof step?.label === "string" && step.label.trim()
+        ? step.label
+        : `Step ${idx + 1}`;
+      const safeStatus = ["pending", "in_progress", "completed", "error"].includes(step?.status)
+        ? step.status
+        : "pending";
+      return {
+        label: safeLabel,
+        status: safeStatus
+      };
+    });
   const badgeText = adminAutoDraftBadgeText(status);
-  const logs = Array.isArray(status.logs) ? status.logs.slice(-6) : [];
+  const logs = Array.isArray(status.logs)
+    ? status.logs.slice(-6).map((line) => String(line))
+    : [];
   const currentStep = steps.find((step) => step.status === "in_progress");
   const errorText = status.status === "error" && status.error ? String(status.error) : "";
   panel.innerHTML = `
@@ -1766,15 +2127,26 @@ async function fetchAdminAutoDraftStatus() {
   if (!response.ok) throw new Error(`Status fetch failed (${response.status})`);
   const data = await response.json();
   adminAutoDraft.status = data;
-  if (data?.status === "success"
-    && typeof data.endedAt === "string"
-    && data.endedAt
-    && adminAutoDraft.lastAppliedEndedAt !== data.endedAt) {
-    await reloadSongDraftsFromServer();
-    adminAutoDraft.lastAppliedEndedAt = data.endedAt;
-    showToast("Auto-draft published. Ready to use.");
+  if (data?.status === "success") {
+    const targetSongId = adminAutoDraft.targetSongId || state.adminSelectedSongId || "let-it-be";
+    saveAdminPrepForSong(targetSongId, { autoDraftReady: true });
+    const successToken = typeof data.endedAt === "string" && data.endedAt
+      ? data.endedAt
+      : "success";
+    if (adminAutoDraft.lastAppliedEndedAt !== successToken) {
+      try {
+        await reloadSongDraftsFromServer();
+      } catch (error) {
+        console.error("reloadSongDraftsFromServer failed", error);
+        showToast("Auto Draft completed, but draft refresh failed. You can still open arrangement.");
+      }
+      applyAutoDraftSelection(targetSongId, "C");
+      adminAutoDraft.lastAppliedEndedAt = successToken;
+      showToast("Auto Draft published. Source set to Auto Generated Draft.");
+    }
   }
   if (state.screen === "admin") {
+    renderAdmin();
     renderAdminAutoDraftStatus();
   }
   if (!data?.running) {
@@ -1804,6 +2176,28 @@ function startAdminAutoDraftPolling() {
   adminAutoDraft.pollIntervalId = setInterval(() => {
     fetchAdminAutoDraftStatus().catch(() => {});
   }, 1200);
+}
+
+function applyAutoDraftSelection(songId, keyNameHint = "C") {
+  if (!songId) return;
+  const rows = allAdminSongSpecs();
+  const selected = rows.find((row) => row.song?.id === songId) || null;
+  const chosenDraftId = Array.isArray(selected?.song?.sourceVariants)
+    && selected.song.sourceVariants.some((row) => String(row?.id) === "let-it-be-hybrid-v2")
+    ? "let-it-be-hybrid-v2"
+    : "default";
+  state.songSourceChoice[songId] = chosenDraftId;
+  const keyName = selected?.keyName || keyNameHint || "C";
+  const curriculum = buildCurriculumForKey(keyName);
+  const songIndex = curriculum.songs.findIndex((row) => row.songData?.id === songId);
+  const exercise = songIndex >= 0 ? curriculum.songs[songIndex] : null;
+  if (exercise?.id) {
+    delete state.songArrangementOverrides[exercise.id];
+    delete state.songTimingOverrides[exercise.id];
+    delete state.songTimingOverrides[`${exercise.id}::${chosenDraftId}`];
+    delete state.songTimingOverrides[`${exercise.id}::default`];
+  }
+  saveState();
 }
 
 function openAdminArrangement(songId, keyName) {
@@ -2454,6 +2848,9 @@ function createYouTubePlayer(songData) {
       onReady: () => {
         songPlayback.playerReady = true;
         songPlayback.videoPlaying = false;
+        if (state.block === "song" && state.screen === "practice") {
+          renderPractice();
+        }
         syncSongFollowAlong(currentExercise(), true);
       },
       onStateChange: (event) => {
@@ -2571,6 +2968,24 @@ function clearSongArrangementOverride(exercise) {
   saveState();
 }
 
+function clearSongSectionOverride(exercise) {
+  if (!exercise?.id) return;
+  delete state.songSectionOverrides[exercise.id];
+  saveState();
+}
+
+function clearAllSongOverridesForExercise(exercise) {
+  if (!exercise?.id) return;
+  delete state.songArrangementOverrides[exercise.id];
+  delete state.songSectionOverrides[exercise.id];
+  for (const key of Object.keys(state.songTimingOverrides || {})) {
+    if (key === exercise.id || key.startsWith(`${exercise.id}::`)) {
+      delete state.songTimingOverrides[key];
+    }
+  }
+  saveState();
+}
+
 function songCalibrationStride() {
   const select = document.getElementById("songTapStrideSelect");
   if (select instanceof HTMLSelectElement) {
@@ -2663,6 +3078,50 @@ function interpolateSongBarStarts(totalBars, baselineStarts, anchors) {
     }
   }
   return starts.map((value) => Number(Number(value).toFixed(2)));
+}
+
+function refitSongBarStartsFromAnchors(totalBars, baselineStarts, anchors) {
+  const anchorEntries = Object.entries(anchors || {})
+    .map(([k, v]) => ({ idx: Number.parseInt(k, 10), time: Number(v) }))
+    .filter((row) => Number.isInteger(row.idx) && row.idx >= 0 && row.idx < totalBars && Number.isFinite(row.time))
+    .sort((a, b) => a.idx - b.idx);
+  if (anchorEntries.length < 2) {
+    return interpolateSongBarStarts(totalBars, baselineStarts, anchors);
+  }
+
+  const secPerBarCandidates = [];
+  for (let i = 1; i < anchorEntries.length; i += 1) {
+    const prev = anchorEntries[i - 1];
+    const curr = anchorEntries[i];
+    const spanBars = curr.idx - prev.idx;
+    if (!Number.isFinite(spanBars) || spanBars <= 0) continue;
+    const secPerBar = (curr.time - prev.time) / spanBars;
+    if (Number.isFinite(secPerBar) && secPerBar > 0.2 && secPerBar < 8) {
+      secPerBarCandidates.push(secPerBar);
+    }
+  }
+
+  if (!secPerBarCandidates.length) {
+    return interpolateSongBarStarts(totalBars, baselineStarts, anchors);
+  }
+
+  secPerBarCandidates.sort((a, b) => a - b);
+  const mid = Math.floor(secPerBarCandidates.length / 2);
+  const secPerBar = secPerBarCandidates.length % 2
+    ? secPerBarCandidates[mid]
+    : (secPerBarCandidates[mid - 1] + secPerBarCandidates[mid]) / 2;
+
+  const first = anchorEntries[0];
+  const starts = Array.from({ length: totalBars }, (_, idx) => Number((first.time + secPerBar * (idx - first.idx)).toFixed(2)));
+  for (const anchor of anchorEntries) {
+    starts[anchor.idx] = Number(anchor.time.toFixed(2));
+  }
+
+  for (let i = 1; i < starts.length; i += 1) {
+    if (!Number.isFinite(starts[i])) starts[i] = Number((starts[i - 1] + secPerBar).toFixed(2));
+    if (starts[i] <= starts[i - 1]) starts[i] = Number((starts[i - 1] + 0.2).toFixed(2));
+  }
+  return starts;
 }
 
 function nextAnchorIndex(currentIndex, totalBars, stride) {
@@ -2759,18 +3218,232 @@ function renderSongSectionEditor(exercise) {
   timeInput.value = override?.timeSignature || section?.sectionTimeSignature || song.timeSignature || "";
 }
 
+function renderSongVersionManager(exercise) {
+  const select = document.getElementById("songVersionSelect");
+  const nameInput = document.getElementById("songVersionNameInput");
+  const saveCurrentBtn = document.getElementById("songSaveVersionBtn");
+  const saveAsNewBtn = document.getElementById("songSaveNewVersionBtn");
+  const duplicateBtn = document.getElementById("songDuplicateVersionBtn");
+  const loadBtn = document.getElementById("songLoadVersionBtn");
+  const setFinalBtn = document.getElementById("songSetFinalVersionBtn");
+  const deleteBtn = document.getElementById("songDeleteVersionBtn");
+  const meta = document.getElementById("songVersionMeta");
+  if (!select || !nameInput || !saveCurrentBtn || !saveAsNewBtn || !duplicateBtn || !loadBtn || !setFinalBtn || !deleteBtn || !meta) return;
+  if (!songHasStructuredChart(exercise)) {
+    select.innerHTML = "<option value=''>No song selected</option>";
+    nameInput.value = "";
+    saveCurrentBtn.disabled = true;
+    saveAsNewBtn.disabled = true;
+    duplicateBtn.disabled = true;
+    loadBtn.disabled = true;
+    setFinalBtn.disabled = true;
+    deleteBtn.disabled = true;
+    meta.textContent = "No arrangement selected.";
+    return;
+  }
+
+  const songId = String(exercise.songData?.id || "");
+  const bucket = songArrangementVersionBucket(songId);
+  const selectedIdRaw = selectedSongArrangementVersionId(songId);
+  const selectedId = bucket.versions.some((row) => row.id === selectedIdRaw)
+    ? selectedIdRaw
+    : (bucket.versions[0]?.id || "");
+  if (selectedId !== selectedIdRaw) {
+    state.songVersionSelectionBySong[songId] = selectedId;
+    saveState();
+  }
+  select.innerHTML = bucket.versions.length
+    ? bucket.versions.map((row) => `<option value="${row.id}" ${row.id === selectedId ? "selected" : ""}>${row.name || row.id}</option>`).join("")
+    : "<option value=''>No saved versions</option>";
+  const selectedVersion = bucket.versions.find((row) => row.id === selectedId) || null;
+  nameInput.value = selectedVersion?.name || "";
+  saveCurrentBtn.disabled = !selectedVersion;
+  saveAsNewBtn.disabled = false;
+  duplicateBtn.disabled = !selectedVersion;
+  loadBtn.disabled = !selectedVersion;
+  setFinalBtn.disabled = !selectedVersion;
+  deleteBtn.disabled = !selectedVersion;
+  if (!selectedVersion) {
+    meta.textContent = bucket.finalVersionId
+      ? `Final: ${bucket.versions.find((row) => row.id === bucket.finalVersionId)?.name || bucket.finalVersionId}`
+      : "No final version selected.";
+    return;
+  }
+  const finalTag = bucket.finalVersionId === selectedVersion.id ? " · Final" : "";
+  const updatedText = selectedVersion.updatedAt ? ` · Updated ${selectedVersion.updatedAt}` : "";
+  meta.textContent = `${selectedVersion.name || selectedVersion.id}${finalTag}${updatedText}`;
+}
+
+function saveArrangementVersion(exercise, options = {}) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const songId = String(exercise.songData?.id || "");
+  if (!songId) return false;
+  const nowIso = new Date().toISOString();
+  const bucket = songArrangementVersionBucket(songId);
+  const snapshot = buildArrangementVersionSnapshot(exercise);
+  if (!snapshot) return false;
+
+  const nextNameRaw = typeof options.name === "string" ? options.name.trim() : "";
+  const selectedVersionId = selectedSongArrangementVersionId(songId);
+  const existingIdx = bucket.versions.findIndex((row) => row.id === selectedVersionId);
+  const createNew = options.createNew === true || existingIdx < 0;
+
+  if (createNew) {
+    const id = createArrangementVersionId();
+    const fallbackNum = bucket.versions.length + 1;
+    const name = nextNameRaw || `Arrangement ${fallbackNum}`;
+    bucket.versions.push({
+      id,
+      name,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      snapshot
+    });
+    saveSongArrangementVersionBucket(songId, bucket);
+    setSelectedSongArrangementVersionId(songId, id);
+    return true;
+  }
+
+  const previous = bucket.versions[existingIdx];
+  bucket.versions[existingIdx] = {
+    ...previous,
+    name: nextNameRaw || previous.name || `Arrangement ${existingIdx + 1}`,
+    updatedAt: nowIso,
+    snapshot
+  };
+  saveSongArrangementVersionBucket(songId, bucket);
+  return true;
+}
+
+function loadSelectedArrangementVersion(exercise) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const songId = String(exercise.songData?.id || "");
+  if (!songId) return false;
+  const selectedVersionId = selectedSongArrangementVersionId(songId);
+  if (!selectedVersionId) return false;
+  const bucket = songArrangementVersionBucket(songId);
+  const version = bucket.versions.find((row) => row.id === selectedVersionId);
+  if (!version?.snapshot) return false;
+  return applyArrangementVersionSnapshot(exercise, version.snapshot);
+}
+
+function setSelectedArrangementVersionAsFinal(exercise) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const songId = String(exercise.songData?.id || "");
+  if (!songId) return false;
+  const selectedVersionId = selectedSongArrangementVersionId(songId);
+  if (!selectedVersionId) return false;
+  const bucket = songArrangementVersionBucket(songId);
+  if (!bucket.versions.some((row) => row.id === selectedVersionId)) return false;
+  bucket.finalVersionId = selectedVersionId;
+  saveSongArrangementVersionBucket(songId, bucket);
+  return true;
+}
+
+function duplicateSelectedArrangementVersion(exercise, nameOverride = "") {
+  if (!songHasStructuredChart(exercise)) return false;
+  const songId = String(exercise.songData?.id || "");
+  if (!songId) return false;
+  const selectedVersionId = selectedSongArrangementVersionId(songId);
+  if (!selectedVersionId) return false;
+  const bucket = songArrangementVersionBucket(songId);
+  const source = bucket.versions.find((row) => row.id === selectedVersionId);
+  if (!source?.snapshot) return false;
+  const nowIso = new Date().toISOString();
+  const nextId = createArrangementVersionId();
+  const baseName = source.name || "Arrangement";
+  const nextName = String(nameOverride || "").trim() || `${baseName} Copy`;
+  bucket.versions.push({
+    id: nextId,
+    name: nextName,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    snapshot: deepClone(source.snapshot)
+  });
+  saveSongArrangementVersionBucket(songId, bucket);
+  setSelectedSongArrangementVersionId(songId, nextId);
+  return true;
+}
+
+function deleteSelectedArrangementVersion(exercise) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const songId = String(exercise.songData?.id || "");
+  if (!songId) return false;
+  const selectedVersionId = selectedSongArrangementVersionId(songId);
+  if (!selectedVersionId) return false;
+  const bucket = songArrangementVersionBucket(songId);
+  const selected = bucket.versions.find((row) => row.id === selectedVersionId) || null;
+  const selectedName = selected?.name || selectedVersionId;
+  const baseConfirm = window.confirm(`Delete version "${selectedName}"?`);
+  if (!baseConfirm) return false;
+  if (bucket.versions.length <= 1) {
+    const lastConfirm = window.confirm("This is the last saved version. Delete it anyway?");
+    if (!lastConfirm) return false;
+  }
+  const nextVersions = bucket.versions.filter((row) => row.id !== selectedVersionId);
+  if (nextVersions.length === bucket.versions.length) return false;
+  const nextSelectedId = nextVersions[0]?.id || "";
+  const nextFinalId = bucket.finalVersionId === selectedVersionId
+    ? ""
+    : bucket.finalVersionId;
+  saveSongArrangementVersionBucket(songId, {
+    versions: nextVersions,
+    finalVersionId: nextFinalId
+  });
+  setSelectedSongArrangementVersionId(songId, nextSelectedId);
+  return true;
+}
+
 function renderSongSourceSelector(songData) {
   const select = document.getElementById("songArrangementSourceSelect");
   if (!(select instanceof HTMLSelectElement) || !songData?.id) return;
-  const variants = Array.isArray(songData.sourceVariants) && songData.sourceVariants.length
+  const songId = String(songData.id);
+  const rawVariants = Array.isArray(songData.sourceVariants) && songData.sourceVariants.length
     ? songData.sourceVariants
     : [{ id: "default", label: songData.arrangementSource?.label || "Default" }];
-  const selected = selectedSongSourceChoice(songData.id);
-  select.innerHTML = variants.map((row) => {
+  const hasAutoGeneratedDraft = rawVariants.some((row) => String(row?.id || "") === "let-it-be-hybrid-v2");
+  const baseVariants = rawVariants.filter((row) => {
+    const id = String(row?.id || "default");
+    const label = String(row?.label || "").toLowerCase();
+    if (hasAutoGeneratedDraft && id === "default") {
+      return false;
+    }
+    if (rawVariants.length > 1 && id === "default" && label.includes("user lyrics file")) {
+      return false;
+    }
+    return true;
+  });
+  const baseSelectedRaw = selectedSongSourceChoice(songId);
+  const baseSelected = baseVariants.some((row) => String(row?.id || "default") === baseSelectedRaw)
+    ? baseSelectedRaw
+    : String(baseVariants[0]?.id || "default");
+  if (baseSelected !== baseSelectedRaw) {
+    state.songSourceChoice[songId] = baseSelected;
+    saveState();
+  }
+  const versionBucket = songArrangementVersionBucket(songId);
+  const versionOptions = versionBucket.versions.map((row) => ({
+    id: String(row.id || ""),
+    label: String(row.name || row.id || "")
+  })).filter((row) => row.id);
+  const selectedVersionId = selectedSongArrangementVersionId(songId);
+  const selectedValue = versionOptions.some((row) => row.id === selectedVersionId)
+    ? `ver:${selectedVersionId}`
+    : `src:${baseSelected}`;
+
+  const baseHtml = baseVariants.map((row) => {
     const id = String(row?.id || "default");
     const label = String(row?.label || id);
-    return `<option value="${id}" ${selected === id ? "selected" : ""}>${label}</option>`;
+    const value = `src:${id}`;
+    return `<option value="${value}" ${selectedValue === value ? "selected" : ""}>${label}</option>`;
   }).join("");
+  const versionHtml = versionOptions.map((row) => {
+    const value = `ver:${row.id}`;
+    return `<option value="${value}" ${selectedValue === value ? "selected" : ""}>Saved: ${row.label}</option>`;
+  }).join("");
+  select.innerHTML = versionOptions.length
+    ? `<optgroup label="Base Sources">${baseHtml}</optgroup><optgroup label="Saved Versions">${versionHtml}</optgroup>`
+    : baseHtml;
   select.disabled = !state.songArrangeAccess;
 }
 
@@ -2778,7 +3451,9 @@ function renderSongArrangementMeta(exercise) {
   const meta = document.getElementById("songArrangeSelectionMeta");
   const mergeBtn = document.getElementById("songMergeBarsBtn");
   const splitBtn = document.getElementById("songSplitBarBtn");
-  if (!meta || !mergeBtn || !splitBtn || !songHasStructuredChart(exercise)) return;
+  const insertBtn = document.getElementById("songInsertBarBtn");
+  const anchorBtn = document.getElementById("songAnchorSelectedBarBtn");
+  if (!meta || !mergeBtn || !splitBtn || !insertBtn || !anchorBtn || !songHasStructuredChart(exercise)) return;
   const selected = sortedSelectedArrangeBars();
   const measures = exercise.songData.measures;
   const inRange = selected.filter((idx) => idx >= 0 && idx < measures.length);
@@ -2787,14 +3462,18 @@ function renderSongArrangementMeta(exercise) {
     && inRange[1] === inRange[0] + 1
     && (measures[inRange[0]]?.section || "") === (measures[inRange[1]]?.section || "");
   const canSplit = inRange.length === 1;
+  const canInsert = inRange.length === 1;
+  const canAnchor = inRange.length === 1;
   mergeBtn.disabled = !canMerge;
   splitBtn.disabled = !canSplit;
+  insertBtn.disabled = !canInsert;
+  anchorBtn.disabled = !canAnchor;
   if (!inRange.length) {
     meta.textContent = "Arrangement edit: click a bar to set playhead; Cmd/Ctrl-click to multi-select bars.";
     return;
   }
   const labels = inRange.map((idx) => idx + 1).join(", ");
-  meta.textContent = `Selected bars: ${labels}. Merge requires 2 adjacent bars in same section. Split requires 1 bar.`;
+  meta.textContent = `Selected bars: ${labels}. Merge requires 2 adjacent bars in same section. Split/Insert/Anchor require 1 bar.`;
 }
 
 function lyricEditTargetForExercise(exercise) {
@@ -2855,6 +3534,59 @@ function setLyricForCurrentTarget(exercise, lyricValue) {
     }];
   events[target.eventIndex] = {
     ...events[target.eventIndex],
+    lyric: String(lyricValue || "")
+  };
+  row.chordEvents = events;
+  row.lyric = events.find((event) => String(event.lyric || "").trim())?.lyric || "";
+  saveSongArrangementOverride(exercise, { measures });
+  return true;
+}
+
+function setLyricForBar(exercise, barIndex, lyricValue) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  const bounded = Math.max(0, Math.min(measures.length - 1, Number(barIndex) || 0));
+  const row = measures[bounded];
+  if (!row) return false;
+  const nextLyric = String(lyricValue || "");
+  row.lyric = nextLyric;
+  const events = Array.isArray(row.chordEvents) && row.chordEvents.length
+    ? row.chordEvents.map((event, idx) => ({
+      ...event,
+      lyric: idx === 0 ? nextLyric : event.lyric || ""
+    }))
+    : [{
+      chord: row.chordSymbol || "C",
+      roman: row.roman || "I",
+      inversion: row.inversion || "root",
+      lyric: nextLyric,
+      beatStart: 1,
+      beatLength: beatsPerBarFromTimeSignature(row.sectionTimeSignature || "4/4")
+    }];
+  row.chordEvents = events;
+  saveSongArrangementOverride(exercise, { measures });
+  return true;
+}
+
+function setLyricForBarEvent(exercise, barIndex, eventIndex, lyricValue) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  const boundedBar = Math.max(0, Math.min(measures.length - 1, Number(barIndex) || 0));
+  const row = measures[boundedBar];
+  if (!row) return false;
+  const events = Array.isArray(row.chordEvents) && row.chordEvents.length
+    ? row.chordEvents.map((event) => ({ ...event }))
+    : [{
+      chord: row.chordSymbol || "C",
+      roman: row.roman || "I",
+      inversion: row.inversion || "root",
+      lyric: row.lyric || "",
+      beatStart: 1,
+      beatLength: beatsPerBarFromTimeSignature(row.sectionTimeSignature || "4/4")
+    }];
+  const boundedEvent = Math.max(0, Math.min(events.length - 1, Number(eventIndex) || 0));
+  events[boundedEvent] = {
+    ...events[boundedEvent],
     lyric: String(lyricValue || "")
   };
   row.chordEvents = events;
@@ -2941,6 +3673,10 @@ function renderSongCalibrationMeta(exercise) {
     jumpBtn.setAttribute("data-anchor-bar", lastAnchor ? String(lastAnchor.barIndex) : "");
     jumpBtn.setAttribute("data-anchor-time", lastAnchor ? String(lastAnchor.timeSec) : "");
   }
+  const rebuildBtn = document.getElementById("songRebuildFromAnchorsBtn");
+  if (rebuildBtn instanceof HTMLButtonElement) {
+    rebuildBtn.disabled = anchorCount < 2;
+  }
 }
 
 function setChartStartFromPlayback(exercise) {
@@ -2998,7 +3734,7 @@ function tapNextBarFromPlayback(exercise) {
   }
 
   anchors[writeIndex] = Number(now.toFixed(2));
-  const barStarts = interpolateSongBarStarts(total, baseline, anchors);
+  const barStarts = refitSongBarStartsFromAnchors(total, baseline, anchors);
   saveSongTimingOverride(exercise, { barStarts, anchors, stride });
   songPlayback.calibrationNextBarIndex = nextAnchorIndex(writeIndex, total, stride);
   songPlayback.activeMeasureIndex = writeIndex;
@@ -3068,7 +3804,7 @@ function fitRemainingSongTimingFromAnchors(exercise) {
     .sort((a, b) => a.idx - b.idx);
   if (!anchorRows.length) return;
 
-  const baseStarts = interpolateSongBarStarts(totalBars, baseline, anchors);
+  const baseStarts = refitSongBarStartsFromAnchors(totalBars, baseline, anchors);
   const lastAnchor = anchorRows[anchorRows.length - 1];
 
   let secPerBar = 3.4;
@@ -3132,6 +3868,30 @@ function toggleArrangeBarSelection(index) {
   }
 }
 
+function saveArrangementAndRemapTiming(exercise, timedMeasures) {
+  const previousTiming = songTimingOverrideForExercise(exercise);
+  const previousAnchors = previousTiming?.anchors && typeof previousTiming.anchors === "object"
+    ? previousTiming.anchors
+    : {};
+  const remappedAnchors = remapAnchorsByTime(previousAnchors, timedMeasures);
+  const stride = [1, 2, 4, 8].includes(Number(previousTiming?.stride))
+    ? Number(previousTiming.stride)
+    : songCalibrationStride();
+  const baseline = timedMeasures.map((measure) => Number(measure.startSec || 0));
+  const barStarts = interpolateSongBarStarts(timedMeasures.length, baseline, remappedAnchors);
+  saveSongArrangementOverride(exercise, { measures: timedMeasures });
+  saveSongTimingOverride(exercise, { barStarts, anchors: remappedAnchors, stride });
+  if (songPlayback.calibrationSongId === timingCalibrationContextId(exercise)) {
+    const anchorIndexes = Object.keys(remappedAnchors)
+      .map((key) => Number.parseInt(key, 10))
+      .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < timedMeasures.length)
+      .sort((a, b) => a - b);
+    const lastAnchor = anchorIndexes.length ? anchorIndexes[anchorIndexes.length - 1] : 0;
+    songPlayback.calibrationNextBarIndex = nextAnchorIndex(lastAnchor, timedMeasures.length, stride);
+  }
+  return { remappedAnchors };
+}
+
 function mergeSelectedSongBars(exercise) {
   if (!songHasStructuredChart(exercise)) return;
   const selected = sortedSelectedArrangeBars();
@@ -3168,27 +3928,8 @@ function mergeSelectedSongBars(exercise) {
     ...measures.slice(selected[1] + 1)
   ];
   const timed = recalculateMeasureTimes(nextMeasures);
-  const previousTiming = songTimingOverrideForExercise(exercise);
-  const previousAnchors = previousTiming?.anchors && typeof previousTiming.anchors === "object"
-    ? previousTiming.anchors
-    : {};
-  const remappedAnchors = remapAnchorsByTime(previousAnchors, timed);
-  const stride = [1, 2, 4, 8].includes(Number(previousTiming?.stride))
-    ? Number(previousTiming.stride)
-    : songCalibrationStride();
-  const baseline = timed.map((measure) => Number(measure.startSec || 0));
-  const barStarts = interpolateSongBarStarts(timed.length, baseline, remappedAnchors);
-  saveSongArrangementOverride(exercise, { measures: timed });
-  saveSongTimingOverride(exercise, { barStarts, anchors: remappedAnchors, stride });
+  saveArrangementAndRemapTiming(exercise, timed);
   state.songArrangeSelectedBars = [selected[0]];
-  if (songPlayback.calibrationSongId === timingCalibrationContextId(exercise)) {
-    const anchorIndexes = Object.keys(remappedAnchors)
-      .map((key) => Number.parseInt(key, 10))
-      .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < timed.length)
-      .sort((a, b) => a - b);
-    const lastAnchor = anchorIndexes.length ? anchorIndexes[anchorIndexes.length - 1] : 0;
-    songPlayback.calibrationNextBarIndex = nextAnchorIndex(lastAnchor, timed.length, stride);
-  }
   renderPractice();
 }
 
@@ -3229,28 +3970,97 @@ function splitSelectedSongBar(exercise) {
     ...measures.slice(index + 1)
   ];
   const timed = recalculateMeasureTimes(nextMeasures);
-  const previousTiming = songTimingOverrideForExercise(exercise);
-  const previousAnchors = previousTiming?.anchors && typeof previousTiming.anchors === "object"
-    ? previousTiming.anchors
-    : {};
-  const remappedAnchors = remapAnchorsByTime(previousAnchors, timed);
-  const stride = [1, 2, 4, 8].includes(Number(previousTiming?.stride))
-    ? Number(previousTiming.stride)
-    : songCalibrationStride();
-  const baseline = timed.map((measure) => Number(measure.startSec || 0));
-  const barStarts = interpolateSongBarStarts(timed.length, baseline, remappedAnchors);
-  saveSongArrangementOverride(exercise, { measures: timed });
-  saveSongTimingOverride(exercise, { barStarts, anchors: remappedAnchors, stride });
+  saveArrangementAndRemapTiming(exercise, timed);
   state.songArrangeSelectedBars = [index, index + 1];
-  if (songPlayback.calibrationSongId === timingCalibrationContextId(exercise)) {
-    const anchorIndexes = Object.keys(remappedAnchors)
-      .map((key) => Number.parseInt(key, 10))
-      .filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < timed.length)
-      .sort((a, b) => a - b);
-    const lastAnchor = anchorIndexes.length ? anchorIndexes[anchorIndexes.length - 1] : 0;
-    songPlayback.calibrationNextBarIndex = nextAnchorIndex(lastAnchor, timed.length, stride);
-  }
   renderPractice();
+}
+
+function insertBarAfterSelection(exercise) {
+  if (!songHasStructuredChart(exercise)) return null;
+  const selected = sortedSelectedArrangeBars();
+  if (selected.length !== 1) return null;
+  const index = selected[0];
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  const source = measures[index];
+  if (!source) return null;
+
+  const duration = Math.max(0.4, Number(source.endSec || 0) - Number(source.startSec || 0) || 3.4);
+  const beatsPerBar = beatsPerBarFromTimeSignature(source.sectionTimeSignature || exercise.songData.timeSignature || "4/4");
+  const templateChord = source.chordEvents?.[0]?.chord || source.chordSymbol || "C";
+  const inserted = sanitizeMeasureForOverride({
+    ...source,
+    lyric: "",
+    startSec: Number(source.endSec || source.startSec || 0),
+    endSec: Number((Number(source.endSec || source.startSec || 0) + duration).toFixed(2)),
+    chordEvents: [{
+      chord: templateChord,
+      roman: romanForChordInC(templateChord),
+      inversion: String(templateChord || "").includes("/") ? "inversion" : "root",
+      lyric: "",
+      beatStart: 1,
+      beatLength: beatsPerBar
+    }]
+  });
+
+  const nextMeasures = [
+    ...measures.slice(0, index + 1),
+    inserted,
+    ...measures.slice(index + 1)
+  ];
+  const timed = recalculateMeasureTimes(nextMeasures);
+  saveArrangementAndRemapTiming(exercise, timed);
+  const newIndex = index + 1;
+  state.songArrangeSelectedBars = [newIndex];
+  songPlayback.activeMeasureIndex = newIndex;
+  songPlayback.activeChordEventIndex = 0;
+  renderPractice();
+  return newIndex;
+}
+
+function deleteBarAtIndex(exercise, barIndex) {
+  if (!songHasStructuredChart(exercise)) return false;
+  const measures = exercise.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+  if (measures.length <= 1) return false;
+  const bounded = Math.max(0, Math.min(measures.length - 1, Number(barIndex) || 0));
+  const nextMeasures = [
+    ...measures.slice(0, bounded),
+    ...measures.slice(bounded + 1)
+  ];
+  const timed = recalculateMeasureTimes(nextMeasures);
+  saveArrangementAndRemapTiming(exercise, timed);
+  const nextIndex = Math.max(0, Math.min(timed.length - 1, bounded));
+  state.songArrangeSelectedBars = [nextIndex];
+  songPlayback.activeMeasureIndex = nextIndex;
+  songPlayback.activeChordEventIndex = 0;
+  renderPractice();
+  return true;
+}
+
+function anchorSelectedBarAtCurrentTime(exercise) {
+  if (!songHasStructuredChart(exercise)) return null;
+  const now = currentPlaybackTime();
+  if (!Number.isFinite(now)) return null;
+  const selected = sortedSelectedArrangeBars();
+  const totalBars = exercise.songData.measures.length;
+  if (!totalBars) return null;
+  const targetIndex = selected.length === 1
+    ? selected[0]
+    : Math.max(0, Math.min(totalBars - 1, Number(songPlayback.activeMeasureIndex || 0)));
+  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= totalBars) return null;
+
+  const stride = songCalibrationStride();
+  const baseline = baselineSongBarStarts(exercise);
+  const override = songTimingOverrideForExercise(exercise) || { barStarts: [], anchors: {}, stride };
+  const anchors = override.anchors && typeof override.anchors === "object" ? { ...override.anchors } : {};
+  anchors[targetIndex] = Number(now.toFixed(2));
+  const barStarts = interpolateSongBarStarts(totalBars, baseline, anchors);
+  saveSongTimingOverride(exercise, { barStarts, anchors, stride });
+  songPlayback.calibrationSongId = timingCalibrationContextId(exercise);
+  songPlayback.calibrationNextBarIndex = nextAnchorIndex(targetIndex, totalBars, stride);
+  songPlayback.activeMeasureIndex = targetIndex;
+  songPlayback.activeChordEventIndex = 0;
+  renderPractice();
+  return { barIndex: targetIndex, timeSec: Number(now.toFixed(2)) };
 }
 
 function resetSongArrangement(exercise) {
@@ -3445,6 +4255,30 @@ function triggerSongSplitSelectedBar() {
   showToast(`Split Bar ${selected[0] + 1}`);
 }
 
+function triggerSongInsertBarAfterSelection() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  const selected = sortedSelectedArrangeBars();
+  if (selected.length !== 1) {
+    showToast("Select exactly 1 bar to insert after");
+    return;
+  }
+  const newIndex = insertBarAfterSelection(exercise);
+  if (!Number.isInteger(newIndex)) return;
+  showToast(`Inserted Bar ${newIndex + 1}`);
+}
+
+function triggerSongAnchorSelectedBarNow() {
+  const exercise = currentExercise();
+  if (!songHasStructuredChart(exercise)) return;
+  const result = anchorSelectedBarAtCurrentTime(exercise);
+  if (!result) {
+    showToast("No playback time yet. Press Play first.");
+    return;
+  }
+  showToast(`Anchored Bar ${result.barIndex + 1} @ ${result.timeSec.toFixed(2)}s`);
+}
+
 function triggerSongResetArrangement() {
   const exercise = currentExercise();
   if (!songHasStructuredChart(exercise)) return;
@@ -3466,19 +4300,9 @@ async function analyzeAndApplyChordsForBar(exercise, barIndex) {
     return;
   }
 
-  const response = await fetch("/api/song/analyze-bar", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      songId: exercise.songData?.id || "let-it-be",
-      startSec,
-      endSec,
-      beatsPerBar
-    })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.ok || !Array.isArray(payload?.events) || !payload.events.length) {
-    throw new Error(String(payload?.message || "No chord events detected for this bar"));
+  const payload = await fetchChordEventsForWindow(exercise, startSec, endSec, beatsPerBar);
+  if (!Array.isArray(payload?.events) || !payload.events.length) {
+    throw new Error("No chord events detected for this bar");
   }
 
   const existingLyric = String(measure.lyric || "");
@@ -3499,6 +4323,93 @@ async function analyzeAndApplyChordsForBar(exercise, barIndex) {
   songPlayback.activeChordEventIndex = 0;
   renderPractice();
   showToast(`Chord analysis applied to Bar ${bounded + 1}`);
+}
+
+async function fetchChordEventsForWindow(exercise, startSec, endSec, beatsPerBar) {
+  const response = await fetch("/api/song/analyze-bar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      songId: exercise.songData?.id || "let-it-be",
+      startSec,
+      endSec,
+      beatsPerBar
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok || !Array.isArray(payload?.events) || !payload.events.length) {
+    throw new Error(String(payload?.message || "No chord events detected for this bar"));
+  }
+  return payload;
+}
+
+function mapLyricsToRebuiltEvents(oldEvents, nextEvents) {
+  const previous = Array.isArray(oldEvents) && oldEvents.length ? oldEvents : [];
+  const upcoming = Array.isArray(nextEvents) && nextEvents.length ? nextEvents : [];
+  if (!upcoming.length) return [];
+  if (!previous.length) return upcoming.map((event) => ({ ...event, lyric: "" }));
+  function eventSpan(event) {
+    const start = Number(event?.beatStart || 1);
+    const len = Number(event?.beatLength || 1);
+    return { start, end: start + Math.max(0.25, len) };
+  }
+  return upcoming.map((event) => {
+    const span = eventSpan(event);
+    let bestLyric = "";
+    let bestOverlap = 0;
+    for (const oldEvent of previous) {
+      const oldSpan = eventSpan(oldEvent);
+      const overlap = Math.max(0, Math.min(span.end, oldSpan.end) - Math.max(span.start, oldSpan.start));
+      if (overlap > bestOverlap && String(oldEvent?.lyric || "").trim()) {
+        bestOverlap = overlap;
+        bestLyric = String(oldEvent.lyric || "");
+      }
+    }
+    return { ...event, lyric: bestLyric };
+  });
+}
+
+async function rebuildSongFromAnchors(exercise) {
+  if (!songHasStructuredChart(exercise)) return;
+  const override = songTimingOverrideForExercise(exercise);
+  const anchorCount = override?.anchors && typeof override.anchors === "object"
+    ? Object.keys(override.anchors).length
+    : 0;
+  if (anchorCount < 2) {
+    throw new Error("Add at least 2 anchors first.");
+  }
+
+  fitRemainingSongTimingFromAnchors(exercise);
+  const refreshed = currentExercise();
+  if (!songHasStructuredChart(refreshed)) return;
+  const measures = refreshed.songData.measures.map((measure) => sanitizeMeasureForOverride(measure));
+
+  for (let i = 0; i < measures.length; i += 1) {
+    const row = measures[i];
+    const beatsPerBar = beatsPerBarFromTimeSignature(row.sectionTimeSignature || refreshed.songData.timeSignature || "4/4");
+    const startSec = Number(row.startSec || 0);
+    const endSec = Number(row.endSec || startSec + 3.4);
+    if (!Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec <= startSec) continue;
+    const payload = await fetchChordEventsForWindow(refreshed, startSec, endSec, beatsPerBar);
+    const rebuiltEvents = payload.events.map((event, idx) => ({
+      chord: String(event?.chord || "C"),
+      roman: romanForChordInC(event?.chord || "C"),
+      inversion: String(event?.chord || "").includes("/") ? "inversion" : "root",
+      lyric: "",
+      beatStart: Number(event?.beatStart || idx + 1),
+      beatLength: Number(event?.beatLength || 1)
+    }));
+    const remapped = mapLyricsToRebuiltEvents(row.chordEvents, rebuiltEvents);
+    row.chordEvents = remapped;
+    row.lyric = remapped.find((event) => String(event?.lyric || "").trim())?.lyric || "";
+    hydrateSongMeasureTiming(row, row.sectionTimeSignature || refreshed.songData.timeSignature || "4/4");
+  }
+
+  saveSongArrangementOverride(refreshed, { measures });
+  state.songArrangeSelectedBars = [];
+  songPlayback.activeMeasureIndex = 0;
+  songPlayback.activeChordEventIndex = 0;
+  renderPractice();
 }
 
 window.onYouTubeIframeAPIReady = () => {
@@ -3601,6 +4512,7 @@ function renderSongPractice(exercise) {
   renderSongArrangementMeta(exercise);
   renderSongLyricsEditor(exercise);
   renderSongSectionEditor(exercise);
+  renderSongVersionManager(exercise);
 
   const activeIndex = songPlayback.videoPlaying
     ? Math.max(-1, Math.min(song.measures.length - 1, songPlayback.activeMeasureIndex))
@@ -3628,7 +4540,12 @@ function renderSongPractice(exercise) {
           <article class="song-measure ${index === activeIndex ? "active" : ""} ${state.songArrangeSelectedBars.includes(index) ? "selected-arrange" : ""} ${isArrangeMode && index === songPlayback.activeMeasureIndex ? "playhead-arrange" : ""} ${isArrangeMode && anchoredBarSet.has(index) ? "anchored-arrange" : ""}" data-song-measure="${index}">
             <div class="song-bar-row">
               <p class="song-bar">Bar ${index + 1}</p>
-              ${isArrangeMode ? `<button class="btn outlined song-analyze-bar-btn" type="button" data-action="song-analyze-bar" data-song-measure="${index}">Get Chords</button>` : ""}
+              ${isArrangeMode ? `
+                <div class="song-bar-actions">
+                  <button class="btn outlined song-analyze-bar-btn" type="button" data-action="song-analyze-bar" data-song-measure="${index}">Get Chords</button>
+                  <button class="btn outlined song-delete-bar-btn" type="button" data-action="song-delete-bar" data-song-measure="${index}">Delete</button>
+                </div>
+              ` : ""}
             </div>
             ${(() => {
               const displayEvent = chordEventForMeasure(measure, index === activeIndex ? activeEventIndex : 0) || measure;
@@ -3650,7 +4567,23 @@ function renderSongPractice(exercise) {
                 <p class="song-event-meta">${displayEvent.romanDisplay || displayEvent.roman} · ${displayEvent.inversionLabel || "Root position"}</p>
                 <p class="song-event-beats">${chordEventBeatLabel(displayEvent)}</p>
                 <div class="song-measure-staff">${renderSongMeasureStaff(measure, index === activeIndex ? activeEventIndex : -1)}</div>
-                <p class="song-lyric">${displayEvent.lyric || measure.lyric || "&nbsp;"}</p>
+                ${isArrangeMode
+                  ? `<div class="song-lyric-events-inline">
+                      ${events.map((event, eventIndex) => `
+                        <label class="song-lyric-event-row" for="song-lyric-${index}-${eventIndex}">
+                          <span class="song-lyric-event-label">${compactChordSymbol(event.chordDisplay || event.chordSymbol)} (${chordEventBeatLabel(event)})</span>
+                          <textarea
+                            id="song-lyric-${index}-${eventIndex}"
+                            class="song-lyric-editor-inline"
+                            data-song-measure="${index}"
+                            data-song-event="${eventIndex}"
+                            rows="1"
+                            placeholder="Lyric for this chord..."
+                          >${event.lyric || ""}</textarea>
+                        </label>
+                      `).join("")}
+                    </div>`
+                  : `<p class="song-lyric">${displayEvent.lyric || measure.lyric || "&nbsp;"}</p>`}
               `;
             })()}
           </article>
@@ -4219,6 +5152,25 @@ function wireEvents() {
   });
 
   document.getElementById("songChart").addEventListener("click", (event) => {
+    if (event.target.closest(".song-lyric-editor-inline")) {
+      return;
+    }
+
+    const deleteBtn = event.target.closest("button[data-action='song-delete-bar'][data-song-measure]");
+    if (deleteBtn) {
+      const exercise = currentExercise();
+      if (!songHasStructuredChart(exercise)) return;
+      const rawBar = Number.parseInt(deleteBtn.dataset.songMeasure || "", 10);
+      if (!Number.isInteger(rawBar)) return;
+      const ok = deleteBarAtIndex(exercise, rawBar);
+      if (!ok) {
+        showToast("Cannot delete the last remaining bar");
+        return;
+      }
+      showToast(`Deleted Bar ${rawBar + 1}`);
+      return;
+    }
+
     const analyzeBtn = event.target.closest("button[data-action='song-analyze-bar'][data-song-measure]");
     if (analyzeBtn) {
       const exercise = currentExercise();
@@ -4278,6 +5230,26 @@ function wireEvents() {
     syncSongFollowAlong(exercise, true);
   });
 
+  document.getElementById("songChart").addEventListener("change", (event) => {
+    const lyricInput = event.target.closest("textarea.song-lyric-editor-inline[data-song-measure]");
+    if (!lyricInput) return;
+    const exercise = currentExercise();
+    if (!songHasStructuredChart(exercise)) return;
+    const rawBar = Number.parseInt(lyricInput.dataset.songMeasure || "", 10);
+    if (!Number.isInteger(rawBar)) return;
+    const rawEvent = Number.parseInt(lyricInput.dataset.songEvent || "", 10);
+    const ok = Number.isInteger(rawEvent)
+      ? setLyricForBarEvent(exercise, rawBar, rawEvent, lyricInput.value || "")
+      : setLyricForBar(exercise, rawBar, lyricInput.value || "");
+    if (!ok) return;
+    showToast(
+      Number.isInteger(rawEvent)
+        ? `Lyric saved for Bar ${rawBar + 1}, Chord ${rawEvent + 1}`
+        : `Lyric saved for Bar ${rawBar + 1}`
+    );
+    renderPractice();
+  });
+
   document.getElementById("songModeButtons").addEventListener("click", (event) => {
     const btn = event.target.closest("button[data-song-mode]");
     if (!btn) return;
@@ -4308,12 +5280,111 @@ function wireEvents() {
     if (!(target instanceof HTMLSelectElement)) return;
     const exercise = currentExercise();
     const songId = exercise?.songData?.id || "let-it-be";
-    state.songSourceChoice[songId] = String(target.value || "default");
-    clearSongArrangementOverride(exercise);
+    const rawValue = String(target.value || "");
+    if (rawValue.startsWith("ver:")) {
+      const versionId = rawValue.slice(4);
+      setSelectedSongArrangementVersionId(songId, versionId);
+      const loaded = loadSelectedArrangementVersion(exercise);
+      if (!loaded) {
+        showToast("Could not load saved version.");
+      }
+      state.songArrangeSelectedBars = [];
+      songPlayback.activeMeasureIndex = 0;
+      songPlayback.activeChordEventIndex = 0;
+      renderPractice();
+      return;
+    }
+    const sourceId = rawValue.startsWith("src:") ? rawValue.slice(4) : (rawValue || "default");
+    setSelectedSongArrangementVersionId(songId, "");
+    state.songSourceChoice[songId] = sourceId;
+    clearAllSongOverridesForExercise(exercise);
     state.songArrangeSelectedBars = [];
     songPlayback.activeMeasureIndex = 0;
     songPlayback.activeChordEventIndex = 0;
-    saveState();
+    renderPractice();
+  });
+
+  document.getElementById("songVersionSelect").addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const exercise = currentExercise();
+    const songId = exercise?.songData?.id || "let-it-be";
+    setSelectedSongArrangementVersionId(songId, String(target.value || ""));
+    renderPractice();
+  });
+
+  document.getElementById("songSaveVersionBtn").addEventListener("click", () => {
+    const exercise = currentExercise();
+    if (!songHasStructuredChart(exercise)) return;
+    const nameInput = document.getElementById("songVersionNameInput");
+    const versionName = nameInput instanceof HTMLInputElement ? nameInput.value : "";
+    const ok = saveArrangementVersion(exercise, { name: versionName, createNew: false });
+    if (!ok) {
+      showToast("Choose a saved version first.");
+      return;
+    }
+    showToast("Arrangement version updated.");
+    renderPractice();
+  });
+
+  document.getElementById("songSaveNewVersionBtn").addEventListener("click", () => {
+    const exercise = currentExercise();
+    if (!songHasStructuredChart(exercise)) return;
+    const nameInput = document.getElementById("songVersionNameInput");
+    const versionName = nameInput instanceof HTMLInputElement ? nameInput.value : "";
+    const ok = saveArrangementVersion(exercise, { name: versionName, createNew: true });
+    if (!ok) {
+      showToast("Could not save new version.");
+      return;
+    }
+    showToast("New arrangement version saved.");
+    renderPractice();
+  });
+
+  document.getElementById("songDuplicateVersionBtn").addEventListener("click", () => {
+    const exercise = currentExercise();
+    if (!songHasStructuredChart(exercise)) return;
+    const nameInput = document.getElementById("songVersionNameInput");
+    const versionName = nameInput instanceof HTMLInputElement ? nameInput.value : "";
+    const ok = duplicateSelectedArrangementVersion(exercise, versionName);
+    if (!ok) {
+      showToast("Choose a saved version first.");
+      return;
+    }
+    showToast("Arrangement version duplicated.");
+    renderPractice();
+  });
+
+  document.getElementById("songLoadVersionBtn").addEventListener("click", () => {
+    const exercise = currentExercise();
+    const ok = loadSelectedArrangementVersion(exercise);
+    if (!ok) {
+      showToast("Could not load selected version.");
+      return;
+    }
+    showToast("Arrangement version loaded.");
+    renderPractice();
+  });
+
+  document.getElementById("songSetFinalVersionBtn").addEventListener("click", () => {
+    const exercise = currentExercise();
+    const ok = setSelectedArrangementVersionAsFinal(exercise);
+    if (!ok) {
+      showToast("Choose a saved version first.");
+      return;
+    }
+    showToast("Final playback version set.");
+    renderPractice();
+  });
+
+  document.getElementById("songDeleteVersionBtn").addEventListener("click", () => {
+    const exercise = currentExercise();
+    const ok = deleteSelectedArrangementVersion(exercise);
+    if (!ok) {
+      showToast("Choose a saved version first.");
+      return;
+    }
+    showToast("Arrangement version deleted.");
     renderPractice();
   });
 
@@ -4369,6 +5440,12 @@ function wireEvents() {
 
   document.getElementById("songAutoSeedTimingBtn").addEventListener("click", triggerSongAutoSeedTiming);
   document.getElementById("songFitRemainingTimingBtn").addEventListener("click", triggerSongFitRemainingTiming);
+  document.getElementById("songRebuildFromAnchorsBtn").addEventListener("click", () => {
+    const exercise = currentExercise();
+    rebuildSongFromAnchors(exercise)
+      .then(() => showToast("Rebuild from anchors complete."))
+      .catch((error) => showToast(error?.message || "Rebuild from anchors failed"));
+  });
   document.getElementById("songJumpLastAnchorBtn").addEventListener("click", triggerSongJumpToLastAnchor);
   document.getElementById("songClearAnchorsFromBtn").addEventListener("click", () => {
     const exercise = currentExercise();
@@ -4383,6 +5460,8 @@ function wireEvents() {
   });
   document.getElementById("songMergeBarsBtn").addEventListener("click", triggerSongMergeSelectedBars);
   document.getElementById("songSplitBarBtn").addEventListener("click", triggerSongSplitSelectedBar);
+  document.getElementById("songInsertBarBtn").addEventListener("click", triggerSongInsertBarAfterSelection);
+  document.getElementById("songAnchorSelectedBarBtn").addEventListener("click", triggerSongAnchorSelectedBarNow);
   document.getElementById("songResetArrangementBtn").addEventListener("click", triggerSongResetArrangement);
   document.getElementById("songApplyLyricBtn").addEventListener("click", triggerSongApplyLyricToTarget);
   document.getElementById("songClearLyricBtn").addEventListener("click", triggerSongClearLyricFromTarget);
@@ -4470,22 +5549,79 @@ function wireEvents() {
     renderAdmin();
   });
 
+  document.getElementById("adminSongDetail").addEventListener("change", (event) => {
+    const fileInput = event.target.closest("#adminLyricsFileInput[data-song-id]");
+    if (!fileInput || !(fileInput instanceof HTMLInputElement)) return;
+    const songId = String(fileInput.dataset.songId || "");
+    const file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+    if (!songId || !file) return;
+    file.text()
+      .then((text) => {
+        const parsed = parseLyricsSectionsText(text);
+        saveAdminPrepForSong(songId, {
+          lyricsText: String(text || ""),
+          lyricsFileName: String(file.name || "lyrics.txt"),
+          lyricsValid: parsed.valid,
+          lyricsMessage: parsed.message,
+          autoDraftReady: false
+        });
+        renderAdmin();
+      })
+      .catch(() => {
+        saveAdminPrepForSong(songId, {
+          lyricsValid: false,
+          lyricsMessage: "Could not read lyrics file."
+        });
+        renderAdmin();
+      });
+  });
+
   document.getElementById("adminSongDetail").addEventListener("click", (event) => {
     if (event.target.closest("#adminRunAutoDraftNowBtn")) {
-      fetch("/api/admin/auto-draft/run", { method: "POST" })
+      const rows = allAdminSongSpecs();
+      const selected = rows.find((row) => row.song?.id === state.adminSelectedSongId) || rows[0];
+      const songId = selected?.song?.id || "";
+      const prep = adminPrepForSong(songId);
+      const selectedVideo = String(state.songVideoChoice[songId] || "");
+      if (!prep.lyricsValid || !prep.lyricsText.trim()) {
+        showToast("Upload a valid lyrics file first.");
+        return;
+      }
+      if (!prep.videoSelected || !selectedVideo) {
+        showToast("Select a YouTube video first.");
+        return;
+      }
+      fetch("/api/admin/lyrics/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          songId,
+          lyricsText: prep.lyricsText
+        })
+      })
+        .then(async (saveResponse) => {
+          const saveBody = await saveResponse.json().catch(() => ({}));
+          if (!saveResponse.ok || !saveBody?.ok) {
+            const message = typeof saveBody?.message === "string" ? saveBody.message : "Could not save lyrics file";
+            throw new Error(message);
+          }
+          return fetch("/api/admin/auto-draft/run", { method: "POST" });
+        })
         .then(async (response) => {
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
             const message = typeof body?.message === "string" ? body.message : "Unable to start auto-draft";
             throw new Error(message);
           }
+          adminAutoDraft.targetSongId = songId || "let-it-be";
+          saveAdminPrepForSong(adminAutoDraft.targetSongId, { autoDraftReady: false });
           adminAutoDraft.status = body.state || adminAutoDraftFallbackStatus();
           renderAdminAutoDraftStatus();
           startAdminAutoDraftPolling();
-          showToast("Auto-draft started");
+          showToast("Auto Draft started");
         })
         .catch((error) => {
-          showToast(error?.message || "Auto-draft failed to start");
+          showToast(error?.message || "Auto Draft failed to start");
           fetchAdminAutoDraftStatus().catch(() => {});
         });
       return;
@@ -4497,6 +5633,7 @@ function wireEvents() {
       const videoId = String(chooseVideoBtn.dataset.videoId || "");
       if (!songId || !videoId) return;
       state.songVideoChoice[songId] = videoId;
+      saveAdminPrepForSong(songId, { videoSelected: true });
       saveState();
       renderAdmin();
       const activeExercise = currentExercise();
@@ -4506,38 +5643,16 @@ function wireEvents() {
       return;
     }
 
-    if (event.target.closest("#adminAutoArrangeBtn")) {
-      const rows = allAdminSongSpecs();
-      const selected = rows.find((row) => row.song?.id === state.adminSelectedSongId) || rows[0];
-      if (!selected?.song?.id) return;
-      const songId = selected.song.id;
-      const chosenDraftId = Array.isArray(selected.song.sourceVariants)
-        && selected.song.sourceVariants.some((row) => String(row?.id) === "let-it-be-hybrid-v2")
-        ? "let-it-be-hybrid-v2"
-        : "default";
-      state.songSourceChoice[songId] = chosenDraftId;
-      const keyName = selected.keyName || "C";
-      const curriculum = buildCurriculumForKey(keyName);
-      const songIndex = curriculum.songs.findIndex((row) => row.songData?.id === songId);
-      const exercise = songIndex >= 0 ? curriculum.songs[songIndex] : null;
-      if (exercise?.id) {
-        delete state.songArrangementOverrides[exercise.id];
-        delete state.songTimingOverrides[exercise.id];
-        const sourceKey = `${exercise.id}::${chosenDraftId}`;
-        delete state.songTimingOverrides[sourceKey];
-        const legacyDefaultKey = `${exercise.id}::default`;
-        delete state.songTimingOverrides[legacyDefaultKey];
-      }
-      saveState();
-      showToast("Auto-arrange draft selected. Open arrangement page to review.");
-      renderAdmin();
-      return;
-    }
-
     if (event.target.closest("#adminOpenArrangementBtn")) {
       const rows = allAdminSongSpecs();
       const selected = rows.find((row) => row.song?.id === state.adminSelectedSongId) || rows[0];
       if (!selected?.song?.id) return;
+      const songId = selected.song.id;
+      const prep = adminPrepForSong(songId);
+      if (!(prep.lyricsValid && prep.videoSelected && prep.autoDraftReady)) {
+        showToast("Complete steps: valid lyrics file, video selection, then Run Auto Draft.");
+        return;
+      }
       openAdminArrangement(selected.song.id, selected.keyName || "C");
     }
   });

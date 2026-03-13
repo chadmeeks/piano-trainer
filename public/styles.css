@@ -668,6 +668,8 @@ h1, h2, h3, p {
   padding: 10px;
   margin-top: 8px;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 10px;
 }
 
@@ -836,6 +838,16 @@ h1, h2, h3, p {
   padding: 7px 9px 9px;
 }
 
+.song-arrange-group[open] {
+  grid-column: 1 / -1;
+}
+
+.song-arrange-group:not([open]) {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
 .song-arrange-summary {
   list-style: none;
   cursor: pointer;
@@ -847,6 +859,11 @@ h1, h2, h3, p {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.song-arrange-group:not([open]) .song-arrange-summary {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
 }
 
 .song-arrange-summary::-webkit-details-marker {
@@ -873,12 +890,23 @@ h1, h2, h3, p {
   margin: 6px 0 0;
 }
 
+@media (max-width: 860px) {
+  .song-arrange-tools {
+    grid-template-columns: 1fr;
+  }
+}
+
 .song-arrange-help-group {
   padding-top: 7px;
   padding-bottom: 8px;
 }
 
 .song-lyrics-editor-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.song-version-grid {
   display: grid;
   gap: 6px;
 }
@@ -898,6 +926,22 @@ h1, h2, h3, p {
   color: #1c3551;
   resize: vertical;
   min-height: 48px;
+}
+
+.song-lyric-events-inline {
+  display: grid;
+  gap: 6px;
+}
+
+.song-lyric-event-row {
+  display: grid;
+  gap: 4px;
+}
+
+.song-lyric-event-label {
+  color: #2f4764;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .song-follow-meta {
@@ -932,6 +976,89 @@ h1, h2, h3, p {
   margin: 0;
 }
 
+.admin-prep-checklist {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-prep-item {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #5a6f8b;
+  font-weight: 700;
+}
+
+.admin-prep-item.ok {
+  color: #1f7a3f;
+}
+
+.admin-lyrics-upload {
+  border: 1px solid #d1deef;
+  border-radius: 10px;
+  background: #f9fbff;
+  padding: 9px;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-lyrics-instruction {
+  margin: 0;
+  color: #3e5674;
+  font-size: 0.82rem;
+}
+
+.admin-lyrics-example {
+  border: 1px solid #d1deef;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #ffffff;
+}
+
+.admin-lyrics-example summary {
+  cursor: pointer;
+  color: #2f4764;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.admin-lyrics-example pre {
+  margin: 6px 0 0;
+  padding: 6px;
+  border: 1px solid #e1e8f3;
+  border-radius: 6px;
+  background: #f8fbff;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  overflow: auto;
+}
+
+.admin-lyrics-file-label {
+  color: #2f4764;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-lyrics-status {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #6d3a3a;
+}
+
+.admin-lyrics-status.ok {
+  color: #1f7a3f;
+}
+
+.admin-lyrics-status.bad {
+  color: #8f2d2d;
+}
+
+.admin-lyrics-file-name {
+  margin: 0;
+  color: #425b79;
+  font-size: 0.78rem;
+}
+
 .admin-video-list {
   display: grid;
   gap: 8px;
@@ -959,6 +1086,58 @@ h1, h2, h3, p {
   margin: 0;
   color: #425b79;
   font-size: 0.84rem;
+}
+
+.admin-video-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-video-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.admin-video-thumb {
+  width: 124px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  border: 1px solid #d1deef;
+  display: block;
+}
+
+.admin-video-preview {
+  border: 1px solid #d1deef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 6px 8px;
+}
+
+.admin-video-preview summary {
+  cursor: pointer;
+  color: #2f4764;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.admin-video-preview-frame {
+  margin-top: 6px;
+  border: 1px solid #d1deef;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000000;
+}
+
+.admin-video-preview-frame iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  display: block;
 }
 
 .admin-autodraft-panel {
@@ -1194,7 +1373,19 @@ h1, h2, h3, p {
   gap: 8px;
 }
 
+.song-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .song-analyze-bar-btn {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.song-delete-bar-btn {
   font-size: 0.72rem;
   padding: 4px 8px;
   border-radius: 999px;
@@ -1310,6 +1501,20 @@ h1, h2, h3, p {
 .song-lyric {
   color: #263f5b;
   min-height: 1.2em;
+}
+
+.song-lyric-editor-inline {
+  width: 100%;
+  border: 1px solid #a8bfdc;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.84rem;
+  color: #243f5e;
+  line-height: 1.35;
+  resize: vertical;
+  min-height: 44px;
+  background: #ffffff;
 }
 
 .hidden {
